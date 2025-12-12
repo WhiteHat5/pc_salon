@@ -1,0 +1,4055 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AURUM</title>
+
+  <!-- Tailwind (CDN для демо). В продакшене собирается через PostCSS и выполняется очистка неиспользуемых классов. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%231e293b'/><text x='50%' y='50%' font-size='60' text-anchor='middle' dy='.3em' fill='%23fbbf24' font-family='Georgia, serif' font-weight='bold'>A</text></svg>">
+
+  <style>
+    /* Небольшие кастомные стили — предпочитаем Tailwind. */
+    .tab { display: none; }
+    .tab[aria-hidden="false"] { display: block; }
+
+    /* Простая анимация для кнопки добавления в корзину */
+    @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1);} }
+    .pop { animation: pop .48s ease; }
+
+    /* Плавная отрисовка загружаемых изображений */
+    img[loading="lazy"]{ image-rendering: auto; }
+
+    /* Стили для карточек товаров - единый размер */
+    .product-card-image-container {
+      width: 100%;
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: rgb(15 23 42);
+      border-radius: 0.5rem;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .product-card-image-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Упрощённый класс для карточек — чтобы избежать повторов в HTML */
+    .card-base { background: rgba(15,23,42,0.7); backdrop-filter: blur(6px); border: 1px solid rgba(245,158,11,0.15); }
+
+    /* Эффект нажатия для карточек */
+    .card-pressable {
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .card-pressable:active {
+      transform: scale(0.95);
+    }
+
+    /* Обрезка текста на 2 строки */
+    .line-clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Стили для ссылок профиля */
+    #profile a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    /* Анимация кнопки "Назад" */
+    #back-button {
+      transition: opacity 0.3s ease, transform 0.3s ease, pointer-events 0.3s ease;
+    }
+    #back-button.back-button-visible {
+      opacity: 1 !important;
+      transform: translateX(0) !important;
+      pointer-events: auto !important;
+    }
+    #back-button.back-button-hidden {
+      opacity: 0 !important;
+      transform: translateX(-50px) !important;
+      pointer-events: none !important;
+    }
+
+    /* Плавная анимация для заголовка корзины при скрытии/показе */
+    #cart-header {
+      transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease, max-height 0.3s ease, z-index 0.3s ease;
+      max-height: 100px;
+      overflow: hidden;
+    }
+    #cart-header.cart-header-hidden {
+      opacity: 0 !important;
+      transform: translateY(-100%) !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      max-height: 0 !important;
+      height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      line-height: 0 !important;
+      font-size: 0 !important;
+      z-index: -1 !important;
+      position: fixed !important;
+      top: -100px !important;
+    }
+
+    /* Плавная анимация для заголовка избранного при скрытии/показе */
+    #favorites-header {
+      transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease, max-height 0.3s ease, z-index 0.3s ease;
+      max-height: 100px;
+      overflow: hidden;
+    }
+    #favorites-header.favorites-header-hidden {
+      opacity: 0 !important;
+      transform: translateY(-100%) !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      max-height: 0 !important;
+      height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      line-height: 0 !important;
+      font-size: 0 !important;
+      z-index: -1 !important;
+      position: fixed !important;
+      top: -100px !important;
+    }
+
+    /* Стили для вкладок отзывов */
+    .reviews-content {
+      display: block;
+    }
+    .reviews-content.hidden {
+      display: none;
+    }
+    .reviews-subtab.active {
+      color: rgb(251 191 36);
+      border-bottom-color: rgb(251 191 36);
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 text-white min-h-screen">
+
+<!-- Корневой контейнер -->
+<div id="app" class="min-h-screen flex flex-col">
+  <!-- Кнопка "Назад" в левом верхнем углу -->
+  <button id="back-button" class="fixed left-2 top-14 z-50 w-10 h-10 flex items-center justify-center bg-amber-600 hover:bg-amber-700 rounded-full shadow-lg transition-all duration-300 opacity-0 pointer-events-none" style="transform: translateX(-50px);">
+    <i class="fas fa-arrow-left text-white text-lg"></i>
+  </button>
+  
+  <!-- Заголовок "Корзина" в левом верхнем углу страницы (виден только в корзине) -->
+  <h2 id="cart-header" class="fixed left-4 top-2 text-xl font-bold text-amber-400 z-50 hidden">Корзина</h2>
+  <!-- Заголовок "Избранное" в левом верхнем углу страницы (виден только в избранном) -->
+  <h2 id="favorites-header" class="fixed left-4 top-2 text-xl font-bold text-amber-400 z-50 hidden mb-2">Избранное</h2>
+  
+  <!-- Верхняя панель поиска (липкая) -->
+  <header class="sticky top-0 z-40 bg-black bg-opacity-70 backdrop-blur-md border-b border-amber-800 p-2">
+    <div class="max-w-2xl mx-auto relative">
+      <input id="search" type="search" placeholder="Найти..." class="w-full p-2 pl-10 rounded-xl bg-slate-800 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400 text-sm" />
+      <i class="fas fa-search absolute left-3 top-2 text-amber-400 text-sm"></i>
+    </div>
+  </header>
+
+  <!-- Основная область контента -->
+  <main class="max-w-3xl mx-auto p-4 flex-1 overflow-y-auto mb-20">
+    <!-- Вкладки: каталог (по умолчанию) -->
+    <section id="catalog" class="tab" aria-hidden="false">
+      <div id="categories" class="grid gap-3"></div>
+      <!-- Контейнер для списка товаров внутри категории -->
+      <div id="product-list" class="mt-4 grid grid-cols-1 gap-4"></div>
+    </section>
+
+    <!-- Результаты поиска -->
+    <section id="search-results" class="tab" aria-hidden="true">
+      <h2 class="text-xl font-bold text-amber-400 mb-4">Результаты поиска</h2>
+      <div id="search-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+    </section>
+
+    <!-- Корзина -->
+    <section id="cart" class="tab" aria-hidden="true" style="padding-top: 4.5rem; padding-bottom: 1rem;">
+      <div id="cart-items" class="space-y-4"></div>
+      <div id="cart-checkout" class="mt-6"></div>
+      <div id="cart-empty" class="flex flex-col items-center justify-center min-h-[60vh] hidden">
+        <div class="text-center text-amber-300 text-xl mb-6">Корзина пуста</div>
+        <button id="go-to-catalog" class="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 px-6 rounded-xl font-bold transition transform hover:scale-105">
+          Перейти в каталог
+        </button>
+      </div>
+    </section>
+
+    <!-- Избранное -->
+    <section id="favorites" class="tab" aria-hidden="true" style="padding-top: 3.5rem; padding-bottom: 1rem;">
+      <div id="favorites-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+      <div id="favorites-empty" class="flex flex-col items-center justify-center min-h-[60vh] hidden">
+        <div class="text-center text-amber-300 text-xl mb-6">Здесь пока пусто</div>
+        <button id="go-to-catalog-from-fav" class="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 px-6 rounded-xl font-bold transition transform hover:scale-105">
+          Перейти в каталог
+        </button>
+      </div>
+    </section>
+
+    <!-- Профиль -->
+    <section id="profile" class="tab" aria-hidden="true" style="padding-top: 1rem; padding-bottom: 1rem;">
+      <div class="max-w-md mx-auto px-4">
+        <!-- Прямоугольная область с профилем -->
+        <div class="card-base rounded-xl p-4 mb-6 flex items-center gap-4">
+          <div id="profile-avatar-container" class="flex-shrink-0">
+            <img id="profile-avatar-img" src="" alt="Avatar" class="w-16 h-16 rounded-full object-cover hidden">
+            <div id="profile-avatar-placeholder" class="w-16 h-16 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-full flex items-center justify-center text-2xl font-bold text-slate-900 shadow-lg"></div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h2 id="profile-name" class="text-lg font-bold text-amber-300 truncate">Пользователь</h2>
+            <p id="profile-username" class="text-sm text-amber-200 truncate">@username</p>
+          </div>
+        </div>
+
+        <!-- Список ссылок -->
+        <div class="space-y-2 mb-6">
+          <a href="#" id="profile-link-favorites" class="block card-base rounded-xl p-4 flex items-center justify-between hover:bg-slate-800 transition cursor-pointer">
+            <div class="flex items-center gap-3">
+              <i class="fas fa-heart text-amber-400 text-lg"></i>
+              <span class="text-white font-medium">Избранное</span>
+            </div>
+            <i class="fas fa-chevron-right text-amber-400 text-sm"></i>
+          </a>
+          <a href="#" id="profile-link-reviews" class="block card-base rounded-xl p-4 flex items-center justify-between hover:bg-slate-800 transition cursor-pointer">
+            <div class="flex items-center gap-3">
+              <i class="fas fa-star text-amber-400 text-lg"></i>
+              <span class="text-white font-medium">Отзывы</span>
+            </div>
+            <i class="fas fa-chevron-right text-amber-400 text-sm"></i>
+          </a>
+          <a href="#" id="profile-link-orders" class="block card-base rounded-xl p-4 flex items-center justify-between hover:bg-slate-800 transition cursor-pointer">
+            <div class="flex items-center gap-3">
+              <i class="fas fa-shopping-bag text-amber-400 text-lg"></i>
+              <span class="text-white font-medium">Мои заказы</span>
+            </div>
+            <i class="fas fa-chevron-right text-amber-400 text-sm"></i>
+          </a>
+          <a href="#" id="profile-link-deposits" class="block card-base rounded-xl p-4 flex items-center justify-between hover:bg-slate-800 transition cursor-pointer">
+            <div class="flex items-center gap-3">
+              <i class="fas fa-wallet text-amber-400 text-lg"></i>
+              <span class="text-white font-medium">Депозиты</span>
+            </div>
+            <i class="fas fa-chevron-right text-amber-400 text-sm"></i>
+          </a>
+          <a href="#" id="profile-link-bonuses" class="block card-base rounded-xl p-4 flex items-center justify-between hover:bg-slate-800 transition cursor-pointer">
+            <div class="flex items-center gap-3">
+              <i class="fas fa-gift text-amber-400 text-lg"></i>
+              <span class="text-white font-medium">Бонусы</span>
+            </div>
+            <i class="fas fa-chevron-right text-amber-400 text-sm"></i>
+          </a>
+          <a href="#" id="profile-link-topup" class="block card-base rounded-xl p-4 flex items-center justify-between hover:bg-slate-800 transition cursor-pointer">
+            <div class="flex items-center gap-3">
+              <i class="fas fa-credit-card text-amber-400 text-lg"></i>
+              <span class="text-white font-medium">Пополнить счет</span>
+            </div>
+            <i class="fas fa-chevron-right text-amber-400 text-sm"></i>
+          </a>
+          <a href="#" id="profile-link-certificate" class="block card-base rounded-xl p-4 flex items-center justify-between hover:bg-slate-800 transition cursor-pointer">
+            <div class="flex items-center gap-3">
+              <i class="fas fa-certificate text-amber-400 text-lg"></i>
+              <span class="text-white font-medium">Сертификат</span>
+            </div>
+            <i class="fas fa-chevron-right text-amber-400 text-sm"></i>
+          </a>
+        </div>
+
+        <!-- Отдельный список для политики -->
+        <div class="space-y-2">
+          <a href="#" id="profile-link-privacy" class="block card-base rounded-xl p-4 flex items-center justify-between hover:bg-slate-800 transition cursor-pointer">
+            <div class="flex items-center gap-3">
+              <i class="fas fa-shield-alt text-amber-400 text-lg"></i>
+              <span class="text-white font-medium">Политика конфиденциальности</span>
+            </div>
+            <i class="fas fa-chevron-right text-amber-400 text-sm"></i>
+          </a>
+          <a href="#" id="profile-link-terms" class="block card-base rounded-xl p-4 flex items-center justify-between hover:bg-slate-800 transition cursor-pointer">
+            <div class="flex items-center gap-3">
+              <i class="fas fa-file-contract text-amber-400 text-lg"></i>
+              <span class="text-white font-medium">Пользовательское соглашение</span>
+            </div>
+            <i class="fas fa-chevron-right text-amber-400 text-sm"></i>
+          </a>
+        </div>
+
+        <!-- Версия приложения -->
+        <div class="mt-8 text-center">
+          <p class="text-xs text-amber-400/60">Version 1.0</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Отзывы -->
+    <section id="reviews" class="tab" aria-hidden="true" style="padding-top: 1rem; padding-bottom: 1rem;">
+      <div class="max-w-md mx-auto px-4">
+        <h2 class="text-xl font-bold text-amber-400 mb-4">Отзывы</h2>
+        
+        <!-- Вкладки для отзывов -->
+        <div class="flex gap-2 mb-6 border-b border-amber-800">
+          <button id="reviews-tab-published" class="reviews-subtab active flex-1 py-2 px-4 text-center font-medium text-amber-400 border-b-2 border-amber-400 transition">
+            Опубликованные
+          </button>
+          <button id="reviews-tab-pending" class="reviews-subtab flex-1 py-2 px-4 text-center font-medium text-amber-300/60 border-b-2 border-transparent hover:text-amber-400 transition">
+            Ожидают отзыва
+          </button>
+        </div>
+
+        <!-- Контент опубликованных отзывов -->
+        <div id="reviews-published-content" class="reviews-content">
+          <div class="flex flex-col items-center justify-center min-h-[60vh]">
+            <div class="text-center text-amber-300 text-xl mb-2">Тут пока пусто</div>
+            <div class="text-center text-amber-300/60 text-sm">Вы еще не оставили отзывы</div>
+          </div>
+        </div>
+
+        <!-- Контент ожидающих отзыва -->
+        <div id="reviews-pending-content" class="reviews-content hidden">
+          <div class="flex flex-col items-center justify-center min-h-[60vh]">
+            <div class="text-center text-amber-300 text-xl mb-2">Тут пока пусто</div>
+            <div class="text-center text-amber-300/60 text-sm">Отзывы оставлять некому</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Мои заказы -->
+    <section id="orders" class="tab" aria-hidden="true" style="padding-top: 1rem; padding-bottom: 1rem;">
+      <div class="max-w-md mx-auto px-4">
+        <h2 class="text-xl font-bold text-amber-400 mb-6">Мои заказы</h2>
+        <div class="flex flex-col items-center justify-center min-h-[60vh]">
+          <div class="text-center text-amber-300 text-xl mb-2">Заказов нет</div>
+          <div class="text-center text-amber-300/60 text-sm">Вы еще не сделали заказ</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Депозиты -->
+    <section id="deposits" class="tab" aria-hidden="true" style="padding-top: 1rem; padding-bottom: 1rem;">
+      <div class="max-w-md mx-auto px-4">
+        <h2 class="text-xl font-bold text-amber-400 mb-6">Депозиты</h2>
+        <div class="flex flex-col items-center justify-center min-h-[60vh]">
+          <div class="text-center text-amber-300 text-xl mb-2">Заказов нет</div>
+          <div class="text-center text-amber-300/60 text-sm">Вы еще не сделали заказ</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Бонусы -->
+    <section id="bonuses" class="tab" aria-hidden="true" style="padding-top: 1rem; padding-bottom: 1rem;">
+      <div class="max-w-md mx-auto px-4">
+        <h2 class="text-xl font-bold text-amber-400 mb-6">Бонусы</h2>
+        <div class="flex flex-col items-center justify-center min-h-[60vh]">
+          <div class="text-center text-amber-300 text-xl mb-2">Заказов нет</div>
+          <div class="text-center text-amber-300/60 text-sm">Вы еще не сделали заказ</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Пользовательское соглашение -->
+    <section id="terms" class="tab" aria-hidden="true" style="padding-top: 1rem; padding-bottom: 1rem;">
+      <div class="max-w-md mx-auto px-4">
+        <h2 class="text-xl font-bold text-amber-400 mb-6">Пользовательское соглашение</h2>
+        <div class="card-base rounded-xl p-6 space-y-4 text-sm text-amber-200/80 leading-relaxed">
+          <p>
+            Настоящее Пользовательское соглашение регулирует отношения между пользователем и сервисом AURUM.
+          </p>
+          <p>
+            Используя наш сервис, вы соглашаетесь с условиями данного соглашения.
+          </p>
+          <h3 class="text-amber-300 font-semibold mt-4 mb-2">1. Общие положения</h3>
+          <p>
+            Сервис предоставляет возможность приобретения товаров и услуг в соответствии с представленным каталогом.
+          </p>
+          <h3 class="text-amber-300 font-semibold mt-4 mb-2">2. Права и обязанности пользователя</h3>
+          <p>
+            Пользователь обязуется предоставлять достоверную информацию и соблюдать правила использования сервиса.
+          </p>
+          <h3 class="text-amber-300 font-semibold mt-4 mb-2">3. Права и обязанности сервиса</h3>
+          <p>
+            Сервис обязуется обеспечивать качественное предоставление услуг и защиту персональных данных пользователей.
+          </p>
+          <h3 class="text-amber-300 font-semibold mt-4 mb-2">4. Ответственность</h3>
+          <p>
+            Сервис не несет ответственности за действия пользователей, совершенные с нарушением условий соглашения.
+          </p>
+          <p class="mt-6 text-xs text-amber-300/60">
+            Дата последнего обновления: 2025
+          </p>
+        </div>
+        <button id="terms-back-btn" class="mt-6 w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+          Назад
+        </button>
+      </div>
+    </section>
+
+    <!-- Политика конфиденциальности -->
+    <section id="privacy" class="tab" aria-hidden="true" style="padding-top: 1rem; padding-bottom: 1rem;">
+      <div class="max-w-md mx-auto px-4">
+        <h2 class="text-xl font-bold text-amber-400 mb-6">Политика конфиденциальности</h2>
+        <div class="card-base rounded-xl p-6 space-y-4 text-sm text-amber-200/80 leading-relaxed max-h-[70vh] overflow-y-auto">
+          <h3 class="text-amber-300 font-semibold text-base mb-3">Политика в отношении обработки персональных данных</h3>
+          
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">1. Общие положения</h4>
+          <p>
+            Настоящая политика обработки персональных данных составлена в соответствии с требованиями Федерального закона от 27.07.2006. № 152-ФЗ «О персональных данных» (далее — Закон о персональных данных) и определяет порядок обработки персональных данных и меры по обеспечению безопасности персональных данных, предпринимаемые ИП Козуб Евгений Вадимович (далее — Оператор).
+          </p>
+          <p>
+            1.1. Оператор ставит своей важнейшей целью и условием осуществления своей деятельности соблюдение прав и свобод человека и гражданина при обработке его персональных данных, в том числе защиты прав на неприкосновенность частной жизни, личную и семейную тайну.
+          </p>
+          <p>
+            1.2. Настоящая политика Оператора в отношении обработки персональных данных (далее — Политика) применяется ко всей информации, которую Оператор может получить о посетителях веб-сайта и пользователях приложения AURUM.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">2. Основные понятия, используемые в Политике</h4>
+          <p>
+            2.1. Автоматизированная обработка персональных данных — обработка персональных данных с помощью средств вычислительной техники.
+          </p>
+          <p>
+            2.2. Блокирование персональных данных — временное прекращение обработки персональных данных (за исключением случаев, если обработка необходима для уточнения персональных данных).
+          </p>
+          <p>
+            2.3. Веб-сайт — совокупность графических и информационных материалов, а также программ для ЭВМ и баз данных, обеспечивающих их доступность в сети интернет через приложение AURUM.
+          </p>
+          <p>
+            2.4. Информационная система персональных данных — совокупность содержащихся в базах данных персональных данных и обеспечивающих их обработку информационных технологий и технических средств.
+          </p>
+          <p>
+            2.5. Обезличивание персональных данных — действия, в результате которых невозможно определить без использования дополнительной информации принадлежность персональных данных конкретному Пользователю или иному субъекту персональных данных.
+          </p>
+          <p>
+            2.6. Обработка персональных данных — любое действие (операция) или совокупность действий (операций), совершаемых с использованием средств автоматизации или без использования таких средств с персональными данными, включая сбор, запись, систематизацию, накопление, хранение, уточнение (обновление, изменение), извлечение, использование, передачу (распространение, предоставление, доступ), обезличивание, блокирование, удаление, уничтожение персональных данных.
+          </p>
+          <p>
+            2.7. Оператор — государственный орган, муниципальный орган, юридическое или физическое лицо, самостоятельно или совместно с другими лицами организующие и/или осуществляющие обработку персональных данных, а также определяющие цели обработки персональных данных, состав персональных данных, подлежащих обработке, действия (операции), совершаемые с персональными данными.
+          </p>
+          <p>
+            2.8. Персональные данные — любая информация, относящаяся прямо или косвенно к определенному или определяемому Пользователю приложения AURUM.
+          </p>
+          <p>
+            2.9. Персональные данные, разрешенные субъектом персональных данных для распространения, — персональные данные, доступ неограниченного круга лиц к которым предоставлен субъектом персональных данных путем дачи согласия на обработку персональных данных, разрешенных субъектом персональных данных для распространения в порядке, предусмотренном Законом о персональных данных (далее — персональные данные, разрешенные для распространения).
+          </p>
+          <p>
+            2.10. Пользователь — любой посетитель приложения AURUM.
+          </p>
+          <p>
+            2.11. Предоставление персональных данных — действия, направленные на раскрытие персональных данных определенному лицу или определенному кругу лиц.
+          </p>
+          <p>
+            2.12. Распространение персональных данных — любые действия, направленные на раскрытие персональных данных неопределенному кругу лиц (передача персональных данных) или на ознакомление с персональными данными неограниченного круга лиц, в том числе обнародование персональных данных в средствах массовой информации, размещение в информационно-телекоммуникационных сетях или предоставление доступа к персональным данным каким-либо иным способом.
+          </p>
+          <p>
+            2.13. Трансграничная передача персональных данных — передача персональных данных на территорию иностранного государства органу власти иностранного государства, иностранному физическому или иностранному юридическому лицу.
+          </p>
+          <p>
+            2.14. Уничтожение персональных данных — любые действия, в результате которых персональные данные уничтожаются безвозвратно с невозможностью дальнейшего восстановления содержания персональных данных в информационной системе персональных данных и/или уничтожаются материальные носители персональных данных.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">3. Основные права и обязанности Оператора</h4>
+          <p>
+            3.1. Оператор имеет право:
+          </p>
+          <p class="ml-4">
+            — получать от субъекта персональных данных достоверные информацию и/или документы, содержащие персональные данные;<br>
+            — в случае отзыва субъектом персональных данных согласия на обработку персональных данных, а также, направления обращения с требованием о прекращении обработки персональных данных, Оператор вправе продолжить обработку персональных данных без согласия субъекта персональных данных при наличии оснований, указанных в Законе о персональных данных;<br>
+            — самостоятельно определять состав и перечень мер, необходимых и достаточных для обеспечения выполнения обязанностей, предусмотренных Законом о персональных данных и принятыми в соответствии с ним нормативными правовыми актами, если иное не предусмотрено Законом о персональных данных или другими федеральными законами.
+          </p>
+          <p>
+            3.2. Оператор обязан:
+          </p>
+          <p class="ml-4">
+            — предоставлять субъекту персональных данных по его просьбе информацию, касающуюся обработки его персональных данных;<br>
+            — организовывать обработку персональных данных в порядке, установленном действующим законодательством РФ;<br>
+            — отвечать на обращения и запросы субъектов персональных данных и их законных представителей в соответствии с требованиями Закона о персональных данных;<br>
+            — сообщать в уполномоченный орган по защите прав субъектов персональных данных по запросу этого органа необходимую информацию в течение 10 дней с даты получения такого запроса;<br>
+            — публиковать или иным образом обеспечивать неограниченный доступ к настоящей Политике в отношении обработки персональных данных;<br>
+            — принимать правовые, организационные и технические меры для защиты персональных данных от неправомерного или случайного доступа к ним, уничтожения, изменения, блокирования, копирования, предоставления, распространения персональных данных, а также от иных неправомерных действий в отношении персональных данных;<br>
+            — прекратить передачу (распространение, предоставление, доступ) персональных данных, прекратить обработку и уничтожить персональные данные в порядке и случаях, предусмотренных Законом о персональных данных;<br>
+            — исполнять иные обязанности, предусмотренные Законом о персональных данных.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">4. Основные права и обязанности субъектов персональных данных</h4>
+          <p>
+            4.1. Субъекты персональных данных имеют право:
+          </p>
+          <p class="ml-4">
+            — получать информацию, касающуюся обработки его персональных данных, за исключением случаев, предусмотренных федеральными законами. Сведения предоставляются субъекту персональных данных Оператором в доступной форме, и в них не должны содержаться персональные данные, относящиеся к другим субъектам персональных данных, за исключением случаев, когда имеются законные основания для раскрытия таких персональных данных. Перечень информации и порядок ее получения установлен Законом о персональных данных;<br>
+            — требовать от оператора уточнения его персональных данных, их блокирования или уничтожения в случае, если персональные данные являются неполными, устаревшими, неточными, незаконно полученными или не являются необходимыми для заявленной цели обработки, а также принимать предусмотренные законом меры по защите своих прав;<br>
+            — выдвигать условие предварительного согласия при обработке персональных данных в целях продвижения на рынке товаров, работ и услуг;<br>
+            — на отзыв согласия на обработку персональных данных, а также, на направление требования о прекращении обработки персональных данных;<br>
+            — обжаловать в уполномоченный орган по защите прав субъектов персональных данных или в судебном порядке неправомерные действия или бездействие Оператора при обработке его персональных данных;<br>
+            — на осуществление иных прав, предусмотренных законодательством РФ.
+          </p>
+          <p>
+            4.2. Субъекты персональных данных обязаны:
+          </p>
+          <p class="ml-4">
+            — предоставлять Оператору достоверные данные о себе;<br>
+            — сообщать Оператору об уточнении (обновлении, изменении) своих персональных данных.
+          </p>
+          <p>
+            4.3. Лица, передавшие Оператору недостоверные сведения о себе, либо сведения о другом субъекте персональных данных без согласия последнего, несут ответственность в соответствии с законодательством РФ.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">5. Принципы обработки персональных данных</h4>
+          <p>
+            5.1. Обработка персональных данных осуществляется на законной и справедливой основе.
+          </p>
+          <p>
+            5.2. Обработка персональных данных ограничивается достижением конкретных, заранее определенных и законных целей. Не допускается обработка персональных данных, несовместимая с целями сбора персональных данных.
+          </p>
+          <p>
+            5.3. Не допускается объединение баз данных, содержащих персональные данные, обработка которых осуществляется в целях, несовместимых между собой.
+          </p>
+          <p>
+            5.4. Обработке подлежат только персональные данные, которые отвечают целям их обработки.
+          </p>
+          <p>
+            5.5. Содержание и объем обрабатываемых персональных данных соответствуют заявленным целям обработки. Не допускается избыточность обрабатываемых персональных данных по отношению к заявленным целям их обработки.
+          </p>
+          <p>
+            5.6. При обработке персональных данных обеспечивается точность персональных данных, их достаточность, а в необходимых случаях и актуальность по отношению к целям обработки персональных данных. Оператор принимает необходимые меры и/или обеспечивает их принятие по удалению или уточнению неполных или неточных данных.
+          </p>
+          <p>
+            5.7. Хранение персональных данных осуществляется в форме, позволяющей определить субъекта персональных данных, не дольше, чем этого требуют цели обработки персональных данных, если срок хранения персональных данных не установлен федеральным законом, договором, стороной которого, выгодоприобретателем или поручителем по которому является субъект персональных данных. Обрабатываемые персональные данные уничтожаются либо обезличиваются по достижении целей обработки или в случае утраты необходимости в достижении этих целей, если иное не предусмотрено федеральным законом.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">6. Цели обработки персональных данных</h4>
+          <p>
+            Цель обработки: предоставление доступа Пользователю к сервисам, информации и/или материалам, содержащимся в приложении AURUM.
+          </p>
+          <p>
+            Персональные данные: фамилия, имя, отчество; электронный адрес; номера телефонов; год, месяц, дата и место рождения.
+          </p>
+          <p>
+            Правовые основания: Федеральный закон «Об информации, информационных технологиях и о защите информации» от 27.07.2006 N 149-ФЗ.
+          </p>
+          <p>
+            Виды обработки персональных данных: Передача персональных данных.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">7. Условия обработки персональных данных</h4>
+          <p>
+            7.1. Обработка персональных данных осуществляется с согласия субъекта персональных данных на обработку его персональных данных.
+          </p>
+          <p>
+            7.2. Обработка персональных данных необходима для достижения целей, предусмотренных международным договором Российской Федерации или законом, для осуществления возложенных законодательством Российской Федерации на оператора функций, полномочий и обязанностей.
+          </p>
+          <p>
+            7.3. Обработка персональных данных необходима для осуществления правосудия, исполнения судебного акта, акта другого органа или должностного лица, подлежащих исполнению в соответствии с законодательством Российской Федерации об исполнительном производстве.
+          </p>
+          <p>
+            7.4. Обработка персональных данных необходима для исполнения договора, стороной которого либо выгодоприобретателем или поручителем по которому является субъект персональных данных, а также для заключения договора по инициативе субъекта персональных данных или договора, по которому субъект персональных данных будет являться выгодоприобретателем или поручителем.
+          </p>
+          <p>
+            7.5. Обработка персональных данных необходима для осуществления прав и законных интересов оператора или третьих лиц либо для достижения общественно значимых целей при условии, что при этом не нарушаются права и свободы субъекта персональных данных.
+          </p>
+          <p>
+            7.6. Осуществляется обработка персональных данных, доступ неограниченного круга лиц к которым предоставлен субъектом персональных данных либо по его просьбе (далее — общедоступные персональные данные).
+          </p>
+          <p>
+            7.7. Осуществляется обработка персональных данных, подлежащих опубликованию или обязательному раскрытию в соответствии с федеральным законом.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">8. Порядок сбора, хранения, передачи и других видов обработки персональных данных</h4>
+          <p>
+            Безопасность персональных данных, которые обрабатываются Оператором, обеспечивается путем реализации правовых, организационных и технических мер, необходимых для выполнения в полном объеме требований действующего законодательства в области защиты персональных данных.
+          </p>
+          <p>
+            8.1. Оператор обеспечивает сохранность персональных данных и принимает все возможные меры, исключающие доступ к персональным данным неуполномоченных лиц.
+          </p>
+          <p>
+            8.2. Персональные данные Пользователя никогда, ни при каких условиях не будут переданы третьим лицам, за исключением случаев, связанных с исполнением действующего законодательства либо в случае, если субъектом персональных данных дано согласие Оператору на передачу данных третьему лицу для исполнения обязательств по гражданско-правовому договору.
+          </p>
+          <p>
+            8.3. В случае выявления неточностей в персональных данных, Пользователь может актуализировать их самостоятельно, путем направления Оператору уведомление на адрес электронной почты Оператора aurumpc25@gmail.com с пометкой «Актуализация персональных данных».
+          </p>
+          <p>
+            8.4. Срок обработки персональных данных определяется достижением целей, для которых были собраны персональные данные, если иной срок не предусмотрен договором или действующим законодательством. Пользователь может в любой момент отозвать свое согласие на обработку персональных данных, направив Оператору уведомление посредством электронной почты на электронный адрес Оператора aurumpc25@gmail.com с пометкой «Отзыв согласия на обработку персональных данных».
+          </p>
+          <p>
+            8.5. Вся информация, которая собирается сторонними сервисами, в том числе платежными системами, средствами связи и другими поставщиками услуг, хранится и обрабатывается указанными лицами (Операторами) в соответствии с их Пользовательским соглашением и Политикой конфиденциальности. Субъект персональных данных и/или с указанными документами. Оператор не несет ответственность за действия третьих лиц, в том числе указанных в настоящем пункте поставщиков услуг.
+          </p>
+          <p>
+            8.6. Установленные субъектом персональных данных запреты на передачу (кроме предоставления доступа), а также на обработку или условия обработки (кроме получения доступа) персональных данных, разрешенных для распространения, не действуют в случаях обработки персональных данных в государственных, общественных и иных публичных интересах, определенных законодательством РФ.
+          </p>
+          <p>
+            8.7. Оператор при обработке персональных данных обеспечивает конфиденциальность персональных данных.
+          </p>
+          <p>
+            8.8. Оператор осуществляет хранение персональных данных в форме, позволяющей определить субъекта персональных данных, не дольше, чем этого требуют цели обработки персональных данных, если срок хранения персональных данных не установлен федеральным законом, договором, стороной которого, выгодоприобретателем или поручителем по которому является субъект персональных данных.
+          </p>
+          <p>
+            8.9. Условием прекращения обработки персональных данных может являться достижение целей обработки персональных данных, истечение срока действия согласия субъекта персональных данных, отзыв согласия субъектом персональных данных или требование о прекращении обработки персональных данных, а также выявление неправомерной обработки персональных данных.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">9. Перечень действий, производимых Оператором с полученными персональными данными</h4>
+          <p>
+            9.1. Оператор осуществляет сбор, запись, систематизацию, накопление, хранение, уточнение (обновление, изменение), извлечение, использование, передачу (распространение, предоставление, доступ), обезличивание, блокирование, удаление и уничтожение персональных данных.
+          </p>
+          <p>
+            9.2. Оператор осуществляет автоматизированную обработку персональных данных с получением и/или передачей полученной информации по информационно-телекоммуникационным сетям или без таковой.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">10. Трансграничная передача персональных данных</h4>
+          <p>
+            10.1. Оператор до начала осуществления деятельности по трансграничной передаче персональных данных обязан уведомить уполномоченный орган по защите прав субъектов персональных данных о своем намерении осуществлять трансграничную передачу персональных данных (такое уведомление направляется отдельно от уведомления о намерении осуществлять обработку персональных данных).
+          </p>
+          <p>
+            10.2. Оператор до подачи вышеуказанного уведомления, обязан получить от органов власти иностранного государства, иностранных физических лиц, иностранных юридических лиц, которым планируется трансграничная передача персональных данных, соответствующие сведения.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">11. Конфиденциальность персональных данных</h4>
+          <p>
+            Оператор и иные лица, получившие доступ к персональным данным, обязаны не раскрывать третьим лицам и не распространять персональные данные без согласия субъекта персональных данных, если иное не предусмотрено федеральным законом.
+          </p>
+
+          <h4 class="text-amber-300 font-semibold mt-4 mb-2">12. Заключительные положения</h4>
+          <p>
+            12.1. Пользователь может получить любые разъяснения по интересующим вопросам, касающимся обработки его персональных данных, обратившись к Оператору с помощью электронной почты aurumpc25@gmail.com.
+          </p>
+          <p>
+            12.2. В данном документе будут отражены любые изменения политики обработки персональных данных Оператором. Политика действует бессрочно до замены ее новой версией.
+          </p>
+          <p>
+            12.3. Актуальная версия Политики в свободном доступе расположена в приложении AURUM.
+          </p>
+        </div>
+        <button id="privacy-back-btn" class="mt-6 w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+          Назад
+        </button>
+      </div>
+    </section>
+
+    <!-- Страница категории с карточкой товара -->
+    <section id="category-page" class="tab" aria-hidden="true">
+      <button id="back-to-catalog" class="mb-4 flex items-center gap-2 text-amber-400 hover:text-amber-300 transition">
+        <i class="fas fa-arrow-left"></i>
+        <span>Назад к каталогу</span>
+      </button>
+      <div id="category-product-card" class="max-w-md mx-auto"></div>
+    </section>
+
+    <!-- Страница с товарами категории 4K Gaming -->
+    <section id="category-4k-products" class="tab" aria-hidden="true">
+      <!-- Breadcrumbs -->
+      <div class="mb-4 flex items-center gap-2 text-sm text-amber-300">
+        <span class="cursor-pointer hover:text-amber-200" id="breadcrumb-catalog-4k">Каталог</span>
+        <i class="fas fa-chevron-right text-xs"></i>
+        <span class="text-amber-400">4K Gaming</span>
+      </div>
+
+      <!-- Верхняя панель: поиск, сортировка, фильтры -->
+      <div class="mb-6 flex items-center gap-3">
+        <!-- Поиск -->
+        <div class="flex-1 relative">
+          <input id="search-4k" type="search" placeholder="Найти..." class="w-full p-2 pl-10 rounded-xl bg-slate-800 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400 text-sm" />
+          <i class="fas fa-search absolute left-3 top-2.5 text-amber-400 text-sm"></i>
+        </div>
+        
+        <!-- Кнопки сортировки и фильтров -->
+        <div class="flex gap-2">
+          <button id="sort-btn-4k" class="p-2 rounded-xl bg-slate-800 bg-opacity-70 border border-amber-700 hover:bg-slate-700 transition text-amber-400" title="Сортировка">
+            <i class="fas fa-sort"></i>
+          </button>
+          <button id="filter-btn-4k" class="p-2 rounded-xl bg-slate-800 bg-opacity-70 border border-amber-700 hover:bg-slate-700 transition text-amber-400" title="Фильтры">
+            <i class="fas fa-sliders-h"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Сетка товаров 2x2 -->
+      <div id="products-4k-grid" class="grid grid-cols-2 gap-3 max-w-4xl mx-auto"></div>
+    </section>
+
+    <!-- Страница с товарами категории 2K Gaming -->
+    <section id="category-2k-products" class="tab" aria-hidden="true">
+      <!-- Breadcrumbs -->
+      <div class="mb-4 flex items-center gap-2 text-sm text-amber-300">
+        <span class="cursor-pointer hover:text-amber-200" id="breadcrumb-catalog-2k">Каталог</span>
+        <i class="fas fa-chevron-right text-xs"></i>
+        <span class="text-amber-400">2K Gaming</span>
+      </div>
+
+      <!-- Верхняя панель: поиск, сортировка, фильтры -->
+      <div class="mb-6 flex items-center gap-3">
+        <!-- Поиск -->
+        <div class="flex-1 relative">
+          <input id="search-2k" type="search" placeholder="Найти..." class="w-full p-2 pl-10 rounded-xl bg-slate-800 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400 text-sm" />
+          <i class="fas fa-search absolute left-3 top-2.5 text-amber-400 text-sm"></i>
+        </div>
+        
+        <!-- Кнопки сортировки и фильтров -->
+        <div class="flex gap-2">
+          <button id="sort-btn-2k" class="p-2 rounded-xl bg-slate-800 bg-opacity-70 border border-amber-700 hover:bg-slate-700 transition text-amber-400" title="Сортировка">
+            <i class="fas fa-sort"></i>
+          </button>
+          <button id="filter-btn-2k" class="p-2 rounded-xl bg-slate-800 bg-opacity-70 border border-amber-700 hover:bg-slate-700 transition text-amber-400" title="Фильтры">
+            <i class="fas fa-sliders-h"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Сетка товаров 2x2 -->
+      <div id="products-2k-grid" class="grid grid-cols-2 gap-3 max-w-4xl mx-auto"></div>
+    </section>
+
+    <!-- Страница с товарами категории Full HD Gaming -->
+    <section id="category-fullhd-products" class="tab" aria-hidden="true">
+      <!-- Breadcrumbs -->
+      <div class="mb-4 flex items-center gap-2 text-sm text-amber-300">
+        <span class="cursor-pointer hover:text-amber-200" id="breadcrumb-catalog-fullhd">Каталог</span>
+        <i class="fas fa-chevron-right text-xs"></i>
+        <span class="text-amber-400">Full HD Gaming</span>
+      </div>
+
+      <!-- Верхняя панель: поиск, сортировка, фильтры -->
+      <div class="mb-6 flex items-center gap-3">
+        <!-- Поиск -->
+        <div class="flex-1 relative">
+          <input id="search-fullhd" type="search" placeholder="Найти..." class="w-full p-2 pl-10 rounded-xl bg-slate-800 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400 text-sm" />
+          <i class="fas fa-search absolute left-3 top-2.5 text-amber-400 text-sm"></i>
+        </div>
+        
+        <!-- Кнопки сортировки и фильтров -->
+        <div class="flex gap-2">
+          <button id="sort-btn-fullhd" class="p-2 rounded-xl bg-slate-800 bg-opacity-70 border border-amber-700 hover:bg-slate-700 transition text-amber-400" title="Сортировка">
+            <i class="fas fa-sort"></i>
+          </button>
+          <button id="filter-btn-fullhd" class="p-2 rounded-xl bg-slate-800 bg-opacity-70 border border-amber-700 hover:bg-slate-700 transition text-amber-400" title="Фильтры">
+            <i class="fas fa-sliders-h"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Сетка товаров 2x2 -->
+      <div id="products-fullhd-grid" class="grid grid-cols-2 gap-3 max-w-4xl mx-auto"></div>
+    </section>
+
+    <!-- Страница конфигуратора ПК -->
+    <section id="configurator" class="tab" aria-hidden="true" style="padding-top: 1rem; padding-bottom: 1rem;">
+      <div id="configurator-content" class="max-w-2xl mx-auto"></div>
+    </section>
+
+    <!-- Модальное окно сортировки -->
+    <div id="sort-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-amber-700">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-xl font-bold text-amber-400">Сортировка</h3>
+          <button id="close-sort-modal" class="text-amber-400 hover:text-amber-300 transition">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        <div class="space-y-3 mb-6">
+          <label class="flex items-center gap-3 p-3 rounded-lg bg-slate-700 bg-opacity-50 border border-amber-700 border-opacity-30 cursor-pointer hover:bg-slate-700 transition">
+            <input type="radio" name="sort" value="price-asc" class="w-4 h-4 text-amber-600">
+            <span class="text-white">Сначала подешевле</span>
+          </label>
+          <label class="flex items-center gap-3 p-3 rounded-lg bg-slate-700 bg-opacity-50 border border-amber-700 border-opacity-30 cursor-pointer hover:bg-slate-700 transition">
+            <input type="radio" name="sort" value="price-desc" class="w-4 h-4 text-amber-600">
+            <span class="text-white">Сначала подороже</span>
+          </label>
+          <label class="flex items-center gap-3 p-3 rounded-lg bg-slate-700 bg-opacity-50 border border-amber-700 border-opacity-30 cursor-pointer hover:bg-slate-700 transition">
+            <input type="radio" name="sort" value="newest" class="w-4 h-4 text-amber-600">
+            <span class="text-white">Сначала новинки</span>
+          </label>
+          <label class="flex items-center gap-3 p-3 rounded-lg bg-slate-700 bg-opacity-50 border border-amber-700 border-opacity-30 cursor-pointer hover:bg-slate-700 transition">
+            <input type="radio" name="sort" value="name-asc" class="w-4 h-4 text-amber-600">
+            <span class="text-white">По алфавиту А-Я</span>
+          </label>
+          <label class="flex items-center gap-3 p-3 rounded-lg bg-slate-700 bg-opacity-50 border border-amber-700 border-opacity-30 cursor-pointer hover:bg-slate-700 transition">
+            <input type="radio" name="sort" value="name-desc" class="w-4 h-4 text-amber-600">
+            <span class="text-white">По алфавиту Я-А</span>
+          </label>
+        </div>
+        <button id="apply-sort" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+          Применить
+        </button>
+      </div>
+    </div>
+
+    <!-- Модальное окно фильтров -->
+    <div id="filter-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-amber-700">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-xl font-bold text-amber-400">Фильтры</h3>
+          <button id="close-filter-modal" class="text-amber-400 hover:text-amber-300 transition">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        <div class="space-y-4 mb-6">
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">Диапазон цены</label>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-blue-200 text-xs mb-1">От</label>
+                <input type="number" id="price-from" min="0" class="w-full p-2 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400 text-white text-sm" />
+              </div>
+              <div>
+                <label class="block text-blue-200 text-xs mb-1">До</label>
+                <input type="number" id="price-to" min="0" class="w-full p-2 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400 text-white text-sm" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex gap-3">
+          <button id="reset-filter" class="flex-1 bg-slate-700 hover:bg-slate-600 text-amber-300 py-3 rounded-xl font-bold transition">
+            Сбросить
+          </button>
+          <button id="apply-filter" class="flex-1 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+            Применить
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно пополнения счета -->
+    <div id="topup-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-amber-700">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-xl font-bold text-amber-400">Пополнить счет</h3>
+          <button id="close-topup-modal" class="text-amber-400 hover:text-amber-300 transition">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">Введите сумму</label>
+            <input type="number" id="topup-amount" min="1" step="0.01" placeholder="0.00" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" />
+          </div>
+          <div class="flex gap-3 mt-6">
+            <button id="topup-continue" class="flex-1 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+              Продолжить
+            </button>
+            <button id="topup-close" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl font-bold transition">
+              Закрыть
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно активации сертификата -->
+    <div id="certificate-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-amber-700">
+        <div class="flex items-center mb-6 relative">
+          <h3 class="text-xl font-bold text-amber-400 text-center flex-1">Активация сертификата</h3>
+          <button id="close-certificate-modal" class="text-amber-400 hover:text-amber-300 transition absolute right-0">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <input type="text" id="certificate-code" placeholder="Введите код сертификата" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" />
+          </div>
+          <div class="flex gap-3 mt-6">
+            <button id="certificate-activate" class="flex-1 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+              Активировать
+            </button>
+            <button id="certificate-close" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl font-bold transition">
+              Закрыть
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно оформления заказа -->
+    <div id="checkout-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center pb-24">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-amber-700 max-h-[85vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-xl font-bold text-amber-400">Оформление заказа</h3>
+          <button id="close-checkout-modal" class="text-amber-400 hover:text-amber-300 transition">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        
+        <!-- Вкладки доставки -->
+        <div class="flex gap-2 mb-6 border-b border-amber-700">
+          <button id="delivery-tab" class="flex-1 py-2 text-center font-semibold text-amber-400 border-b-2 border-amber-400 transition">
+            Доставка
+          </button>
+          <button id="pickup-tab" class="flex-1 py-2 text-center font-semibold text-slate-400 hover:text-amber-300 transition">
+            Самовывоз
+          </button>
+        </div>
+
+        <!-- Форма доставки -->
+        <div id="delivery-form" class="space-y-4">
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">ФИО <span class="text-red-400">*</span></label>
+            <input type="text" id="delivery-name" required class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="Иванов Иван Иванович" />
+          </div>
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">Телефон <span class="text-red-400">*</span></label>
+            <input type="tel" id="delivery-phone" required class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="+7 (999) 123-45-67" />
+          </div>
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">Адрес доставки <span class="text-red-400">*</span></label>
+            <textarea id="delivery-address" required rows="3" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm resize-none" placeholder="Укажите адрес доставки"></textarea>
+          </div>
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">Комментарий</label>
+            <textarea id="delivery-comment" rows="3" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm resize-none" placeholder="Дополнительная информация (необязательно)"></textarea>
+          </div>
+        </div>
+
+        <!-- Форма самовывоза -->
+        <div id="pickup-form" class="space-y-4 hidden">
+          <div class="bg-slate-700 bg-opacity-50 rounded-lg p-4 border border-amber-700">
+            <p class="text-amber-300 font-medium mb-2">Адрес магазина:</p>
+            <p class="text-white">г Краснодар, ул Московская, д 25</p>
+          </div>
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">ФИО <span class="text-red-400">*</span></label>
+            <input type="text" id="pickup-name" required class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="Иванов Иван Иванович" />
+          </div>
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">Телефон <span class="text-red-400">*</span></label>
+            <input type="tel" id="pickup-phone" required class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="+7 (999) 123-45-67" />
+          </div>
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">Комментарий</label>
+            <textarea id="pickup-comment" rows="3" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm resize-none" placeholder="Дополнительная информация (необязательно)"></textarea>
+          </div>
+        </div>
+
+        <div class="mt-6 mb-4">
+          <button id="checkout-continue-btn" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+            Продолжить
+          </button>
+          <p class="text-[10px] text-slate-400 text-center mt-3 leading-tight px-2 pb-2">
+            Продолжая оформление заказа, вы соглашаетесь с<br/>
+            <a href="#" class="text-amber-400 hover:text-amber-300 underline">Политикой обработки персональных данных</a>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно оплаты (симуляция) -->
+    <div id="payment-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-amber-700">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-xl font-bold text-amber-400">Оплата заказа</h3>
+          <button id="close-payment-modal" class="text-amber-400 hover:text-amber-300 transition">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        <div class="space-y-4">
+          <div class="bg-slate-700 bg-opacity-50 rounded-lg p-4 border border-amber-700">
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-amber-300">Сумма заказа:</span>
+              <span class="text-xl font-bold text-amber-400" id="payment-total">0 ₽</span>
+            </div>
+          </div>
+          <div class="space-y-3">
+            <p class="text-slate-300 text-sm mb-4">Выберите способ оплаты:</p>
+            <label class="flex items-center gap-3 p-3 rounded-lg bg-slate-700 bg-opacity-50 border border-amber-700 border-opacity-30 cursor-pointer hover:bg-slate-700 transition">
+              <input type="radio" name="payment-method" value="card" checked class="w-4 h-4 text-amber-600">
+              <span class="text-white">Банковская карта</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg bg-slate-700 bg-opacity-50 border border-amber-700 border-opacity-30 cursor-pointer hover:bg-slate-700 transition">
+              <input type="radio" name="payment-method" value="cash" class="w-4 h-4 text-amber-600">
+              <span class="text-white">Наличными при получении</span>
+            </label>
+          </div>
+          <div class="mt-6">
+            <button id="payment-process-btn" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+              Оплатить
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Модальное окно успешного оформления заказа -->
+    <div id="order-success-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-amber-700">
+        <div class="text-center">
+          <div class="mb-4">
+            <i class="fas fa-check-circle text-6xl text-green-400"></i>
+          </div>
+          <h3 class="text-2xl font-bold text-amber-400 mb-4">Заказ оформлен!</h3>
+          <p class="text-slate-300 mb-6">
+            Ваш заказ успешно принят в обработку. Наш менеджер свяжется с вами в ближайшее время для подтверждения заказа.
+          </p>
+          <div class="bg-slate-700 bg-opacity-50 rounded-lg p-4 border border-amber-700 mb-6">
+            <p class="text-amber-300 font-medium mb-2">Контакты менеджера:</p>
+            <p class="text-white mb-1"><i class="fas fa-phone text-amber-400 mr-2"></i>+7 (999) 123-45-67</p>
+            <p class="text-white"><i class="fas fa-envelope text-amber-400 mr-2"></i>manager@pc-salon.ru</p>
+          </div>
+          <button id="close-order-success-modal" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+            Понятно
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Нижняя навигация (фиксированная) -->
+<nav class="fixed bottom-0 left-0 right-0 bg-black bg-opacity-90 backdrop-blur-2xl border-t border-amber-800 z-50">
+  <div class="max-w-3xl mx-auto px-4 py-0">
+    <div class="grid grid-cols-4 gap-2">
+      <button data-tab="catalog" class="nav-btn tab-btn flex flex-col items-center py-2 rounded-xl active" aria-pressed="true">
+        <i class="fas fa-th-large text-base mb-1.5"></i>
+        <span class="text-[12px]">Каталог</span>
+      </button>
+      <button data-tab="cart" class="nav-btn tab-btn flex flex-col items-center py-2 rounded-xl relative" aria-pressed="false">
+        <div class="relative">
+          <i class="fas fa-shopping-cart text-base mb-1.5"></i>
+          <span id="bottom-cart-count" class="absolute top-0 right-0 bg-red-600 text-[10px] w-4 h-4 rounded-full flex items-center justify-center text-white hidden z-10 transform translate-x-1/2 -translate-y-1/2">0</span>
+        </div>
+        <span class="text-[12px]">Корзина</span>
+      </button>
+      <button data-tab="favorites" class="nav-btn tab-btn flex flex-col items-center py-2 rounded-xl relative" aria-pressed="false">
+        <div class="relative">
+          <i class="fas fa-heart text-base mb-1.5"></i>
+          <span id="bottom-fav-count" class="absolute top-0 right-0 bg-pink-600 text-[10px] w-4 h-4 rounded-full flex items-center justify-center text-white hidden z-10 transform translate-x-1/2 -translate-y-1/2">0</span>
+        </div>
+        <span class="text-[12px]">Избранное</span>
+      </button>
+      <button data-tab="profile" class="nav-btn tab-btn flex flex-col items-center py-2 rounded-xl" aria-pressed="false">
+        <i class="fas fa-user text-base mb-1.5"></i>
+        <span class="text-[12px]">Профиль</span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- Плавающая панель оформления заказа (скрыта, используется только для обратной совместимости) -->
+<div id="checkout-bar" class="hidden">
+  <div id="total" class="hidden">0 ₽</div>
+</div>
+
+<!-- SDK Telegram WebApp -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+  // маленькая обёртка для безопасного доступа к Telegram.WebApp, если он присутствует
+  function safeTelegram() {
+    // Пробуем получить WebApp разными способами
+    if(window.Telegram && window.Telegram.WebApp) {
+      return window.Telegram.WebApp;
+    }
+    // Альтернативный способ
+    if(window.tg && window.tg.WebApp) {
+      return window.tg.WebApp;
+    }
+    return null;
+  }
+  
+  // Ждем загрузки Telegram WebApp
+  function initTelegramWebApp() {
+    const tg = safeTelegram();
+    if(tg) {
+      console.log('Telegram WebApp найден');
+      try {
+        tg.ready();
+        tg.expand();
+        
+        // Подписываемся на событие готовности
+        if(tg.onEvent) {
+          tg.onEvent('viewportChanged', function() {
+            console.log('Viewport changed');
+          });
+        }
+        
+        // Пробуем обновить профиль сразу
+        if(typeof updateTelegramProfile === 'function') {
+          setTimeout(updateTelegramProfile, 200);
+        }
+        
+        // Обновляем кнопку "Назад"
+        if(typeof updateBackButton === 'function') {
+          setTimeout(updateBackButton, 200);
+        }
+      } catch(e) {
+        console.warn('Ошибка инициализации Telegram WebApp:', e);
+      }
+    } else {
+      console.warn('Telegram WebApp не найден - возможно, приложение запущено не в Telegram');
+    }
+  }
+  
+  // Пробуем инициализировать сразу, если скрипт уже загружен
+  if(document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(initTelegramWebApp, 100);
+    });
+  } else {
+    setTimeout(initTelegramWebApp, 100);
+  }
+  
+  // Также пробуем через window.onload
+  window.addEventListener('load', function() {
+    setTimeout(initTelegramWebApp, 300);
+  });
+</script>
+
+<!-- Логика приложения (модульная, современная) -->
+<script type="module">
+// -----------------------------
+// Мок-данные (в продакшене заменяются на вызовы API)
+// -----------------------------
+const CATEGORIES = [
+  { id: '4k', name: '4K Gaming', image: '4K.png' },
+  { id: '2k', name: '2K Gaming', image: '2K.png' },
+  { id: 'fullhd', name: 'Full HD Gaming', image: 'FullHD.png' }
+];
+
+// Товары для категории 4K Gaming
+const PRODUCTS_4K = [
+  { id: 101, name: 'AURUM 4K Pro', price: 349990, image: 'photo/pc4_1.jpg', cpu: 'i9-13900K', gpu: 'RTX4090' },
+  { id: 102, name: 'AURUM 4K Elite', price: 299990, image: 'photo/pc4_2.jpg', cpu: 'i7-13700K', gpu: 'RTX4080' },
+  { id: 103, name: 'AURUM 4K Standard', price: 249990, image: 'photo/pc4_3.jpg', cpu: 'R9 7900X', gpu: 'RTX4070 TI' },
+  { id: 104, name: 'AURUM 4K Basic', price: 199990, image: 'photo/pc4_4.jpg', cpu: 'R7 7700X', gpu: 'RTX4070' }
+];
+
+// Товары для категории 2K Gaming
+const PRODUCTS_2K = [
+  { id: 201, name: 'AURUM 2K Ultra', price: 239990, image: 'photo/pc2_1.jpg', cpu: 'i7-13700KF', gpu: 'RTX4080 SUPER' },
+  { id: 202, name: 'AURUM 2K Pro', price: 199990, image: 'photo/pc2_2.jpg', cpu: 'R7 7800X3D', gpu: 'RTX4070 TI SUPER' },
+  { id: 203, name: 'AURUM 2K Core', price: 169990, image: 'photo/pc2_3.jpg', cpu: 'i5-13600KF', gpu: 'RTX4070 SUPER' },
+  { id: 204, name: 'AURUM 2K Starter', price: 149990, image: 'photo/pc2_4.jpg', cpu: 'R5 7600', gpu: 'RTX4060 Ti' }
+];
+
+// Товары для категории Full HD Gaming
+const PRODUCTS_FULLHD = [
+  { id: 301, name: 'AURUM FHD Ultra', price: 139990, image: 'photo/pc_fh1.jpg', cpu: 'i5-13400F', gpu: 'RTX4060 Ti' },
+  { id: 302, name: 'AURUM FHD Pro', price: 119990, image: 'photo/pc_fh2.jpg', cpu: 'R5 7600', gpu: 'RTX4060' },
+  { id: 303, name: 'AURUM FHD Core', price: 99990, image: 'photo/pc_fh3.jpg', cpu: 'i5-12400F', gpu: 'RTX3060 Ti' },
+  { id: 304, name: 'AURUM FHD Starter', price: 89990, image: 'photo/pc_fh4.jpg', cpu: 'R5 5600', gpu: 'RTX3050' }
+];
+
+// Пустой массив для обратной совместимости (если нужны товары для других категорий)
+const PRODUCTS = [];
+
+// Данные для карточки ПК в категории 4K Gaming
+const PC_CONFIGS = {
+  '4k': {
+    name: 'AURUM 4K Gaming Pro',
+    price: 349990,
+    image: '4K.png',
+    specs: {
+      cpu: 'Intel Core i9-13900K',
+      gpu: 'NVIDIA GeForce RTX 4090 24GB',
+      ram: '32GB DDR5-6000MHz',
+      storage: '2TB NVMe SSD',
+      motherboard: 'ASUS ROG Strix Z790-E',
+      psu: '1000W 80+ Gold',
+      cooling: 'AIO 360mm'
+    },
+    description: 'Мощный игровой ПК для комфортной игры в 4K разрешении с максимальными настройками графики. Идеально подходит для требовательных игр и профессиональной работы.'
+  }
+};
+
+// Данные конфигурации для товаров (опции для изменения)
+const PRODUCT_CONFIGS = {
+  101: { // AURUM 4K Pro
+    basePrice: 349990,
+    baseCpu: 'i9-13900K',
+    baseGpu: 'RTX4090',
+    image: 'photo/pc4_1.jpg',
+    name: 'AURUM 4K Pro',
+    description: `Самый мощный вариант для 4К гейминга на современном процессоре Ryzen с видеокартой Nvidia 5000 серии.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: AMD Ryzen 9 9950x3d
+
+• Оперативная память: DDR5 64GB 6000Mhz Kingston
+
+• Видеокарта: NVIDIA RTX5090 32GB Gamerock
+
+• SSD: M2 NVME 2TB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH1000W 80+ Platinum
+
+• Водяное охлаждение Thermalright 360мм с LCD дисплеем
+
+• Охлаждение: 9 ARGB вертушек + пульт
+
+• Корпус: Lian Li 011 Dynamic EVO RGB
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'Intel Core i9-13900K', price: 0, selected: true },
+        { name: 'AMD Ryzen 9 9950X3D', price: 25000 },
+        { name: 'Intel Core i9-14900K', price: 15000 },
+        { name: 'AMD Ryzen 9 7950X3D', price: 20000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 4090 24GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 5090 32GB', price: 50000 },
+        { name: 'NVIDIA RTX 4080 SUPER 16GB', price: -20000 },
+        { name: 'AMD RX 7900 XTX 24GB', price: -15000 }
+      ],
+      ssd: [
+        { name: '2TB NVMe SSD', price: 0, selected: true },
+        { name: '1TB NVMe SSD', price: -8000 },
+        { name: '4TB NVMe SSD', price: 15000 },
+        { name: '2TB NVMe SSD + 4TB HDD', price: 5000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  // Остальные товары 4K Gaming
+  102: { // AURUM 4K Elite
+    basePrice: 299990,
+    baseCpu: 'i7-13700K',
+    baseGpu: 'RTX4080',
+    image: 'photo/pc4_2.jpg',
+    name: 'AURUM 4K Elite',
+    description: `Мощная сборка для 4К гейминга с отличным соотношением цена/производительность.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: Intel Core i7-13700K
+
+• Оперативная память: DDR5 32GB 6000Mhz Kingston
+
+• Видеокарта: NVIDIA RTX4080 16GB
+
+• SSD: M2 NVME 2TB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH850W 80+ Gold
+
+• Водяное охлаждение Thermalright 360мм
+
+• Охлаждение: 6 ARGB вертушек
+
+• Корпус: Lian Li 011 Dynamic RGB
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'Intel Core i7-13700K', price: 0, selected: true },
+        { name: 'AMD Ryzen 9 7900X', price: 20000 },
+        { name: 'Intel Core i7-14700K', price: 15000 },
+        { name: 'AMD Ryzen 7 7800X3D', price: 18000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 4080 16GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4090 24GB', price: 40000 },
+        { name: 'NVIDIA RTX 4070 TI SUPER 16GB', price: -15000 },
+        { name: 'AMD RX 7900 XTX 24GB', price: -10000 }
+      ],
+      ssd: [
+        { name: '2TB NVMe SSD', price: 0, selected: true },
+        { name: '1TB NVMe SSD', price: -8000 },
+        { name: '4TB NVMe SSD', price: 15000 },
+        { name: '2TB NVMe SSD + 4TB HDD', price: 5000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  103: { // AURUM 4K Standard
+    basePrice: 249990,
+    baseCpu: 'R9 7900X',
+    baseGpu: 'RTX4070 TI',
+    image: 'photo/pc4_3.jpg',
+    name: 'AURUM 4K Standard',
+    description: `Сбалансированная сборка для комфортного 4К гейминга.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: AMD Ryzen 9 7900X
+
+• Оперативная память: DDR5 32GB 5600Mhz Kingston
+
+• Видеокарта: NVIDIA RTX4070 TI 12GB
+
+• SSD: M2 NVME 1TB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH750W 80+ Gold
+
+• Водяное охлаждение Thermalright 240мм
+
+• Охлаждение: 4 ARGB вертушки
+
+• Корпус: Lian Li Lancool 216 RGB
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'AMD Ryzen 9 7900X', price: 0, selected: true },
+        { name: 'Intel Core i7-13700K', price: 10000 },
+        { name: 'AMD Ryzen 9 7900X3D', price: 20000 },
+        { name: 'Intel Core i5-13600K', price: -5000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 4070 TI 12GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4080 16GB', price: 30000 },
+        { name: 'NVIDIA RTX 4070 SUPER 12GB', price: -10000 },
+        { name: 'AMD RX 7800 XT 16GB', price: -15000 }
+      ],
+      ssd: [
+        { name: '1TB NVMe SSD', price: 0, selected: true },
+        { name: '2TB NVMe SSD', price: 8000 },
+        { name: '4TB NVMe SSD', price: 23000 },
+        { name: '1TB NVMe SSD + 2TB HDD', price: 3000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  104: { // AURUM 4K Basic
+    basePrice: 199990,
+    baseCpu: 'R7 7700X',
+    baseGpu: 'RTX4070',
+    image: 'photo/pc4_4.jpg',
+    name: 'AURUM 4K Basic',
+    description: `Бюджетная сборка для входа в 4К гейминг.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: AMD Ryzen 7 7700X
+
+• Оперативная память: DDR5 16GB 5600Mhz Kingston
+
+• Видеокарта: NVIDIA RTX4070 12GB
+
+• SSD: M2 NVME 1TB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH650W 80+ Bronze
+
+• Воздушное охлаждение Thermalright Peerless Assassin
+
+• Охлаждение: 3 ARGB вертушки
+
+• Корпус: Lian Li Lancool 205 Mesh RGB
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'AMD Ryzen 7 7700X', price: 0, selected: true },
+        { name: 'Intel Core i5-13600K', price: 5000 },
+        { name: 'AMD Ryzen 7 7800X3D', price: 15000 },
+        { name: 'Intel Core i7-13700K', price: 20000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 4070 12GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4070 TI 12GB', price: 20000 },
+        { name: 'NVIDIA RTX 4060 TI 16GB', price: -10000 },
+        { name: 'AMD RX 7700 XT 12GB', price: -15000 }
+      ],
+      ssd: [
+        { name: '1TB NVMe SSD', price: 0, selected: true },
+        { name: '2TB NVMe SSD', price: 8000 },
+        { name: '512GB NVMe SSD', price: -5000 },
+        { name: '1TB NVMe SSD + 1TB HDD', price: 2000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  // Товары 2K Gaming
+  201: { // AURUM 2K Ultra
+    basePrice: 239990,
+    baseCpu: 'i7-13700KF',
+    baseGpu: 'RTX4080 SUPER',
+    image: 'photo/pc2_1.jpg',
+    name: 'AURUM 2K Ultra',
+    description: `Топовая сборка для 2К гейминга с максимальной производительностью.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: Intel Core i7-13700KF
+
+• Оперативная память: DDR5 32GB 6000Mhz Kingston
+
+• Видеокарта: NVIDIA RTX4080 SUPER 16GB
+
+• SSD: M2 NVME 2TB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH850W 80+ Gold
+
+• Водяное охлаждение Thermalright 360мм
+
+• Охлаждение: 6 ARGB вертушек
+
+• Корпус: Lian Li 011 Dynamic RGB
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'Intel Core i7-13700KF', price: 0, selected: true },
+        { name: 'AMD Ryzen 7 7800X3D', price: 15000 },
+        { name: 'Intel Core i7-14700KF', price: 10000 },
+        { name: 'AMD Ryzen 9 7900X', price: 20000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 4080 SUPER 16GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4090 24GB', price: 35000 },
+        { name: 'NVIDIA RTX 4070 TI SUPER 16GB', price: -20000 },
+        { name: 'AMD RX 7900 XTX 24GB', price: -15000 }
+      ],
+      ssd: [
+        { name: '2TB NVMe SSD', price: 0, selected: true },
+        { name: '1TB NVMe SSD', price: -8000 },
+        { name: '4TB NVMe SSD', price: 15000 },
+        { name: '2TB NVMe SSD + 4TB HDD', price: 5000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  202: { // AURUM 2K Pro
+    basePrice: 199990,
+    baseCpu: 'R7 7800X3D',
+    baseGpu: 'RTX4070 TI SUPER',
+    image: 'photo/pc2_2.jpg',
+    name: 'AURUM 2K Pro',
+    description: `Отличная сборка для 2К гейминга с процессором X3D.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: AMD Ryzen 7 7800X3D
+
+• Оперативная память: DDR5 32GB 6000Mhz Kingston
+
+• Видеокарта: NVIDIA RTX4070 TI SUPER 16GB
+
+• SSD: M2 NVME 2TB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH750W 80+ Gold
+
+• Водяное охлаждение Thermalright 240мм
+
+• Охлаждение: 4 ARGB вертушки
+
+• Корпус: Lian Li Lancool 216 RGB
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'AMD Ryzen 7 7800X3D', price: 0, selected: true },
+        { name: 'Intel Core i7-13700K', price: 10000 },
+        { name: 'AMD Ryzen 9 7900X', price: 15000 },
+        { name: 'Intel Core i5-13600K', price: -5000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 4070 TI SUPER 16GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4080 SUPER 16GB', price: 25000 },
+        { name: 'NVIDIA RTX 4070 SUPER 12GB', price: -15000 },
+        { name: 'AMD RX 7800 XT 16GB', price: -20000 }
+      ],
+      ssd: [
+        { name: '2TB NVMe SSD', price: 0, selected: true },
+        { name: '1TB NVMe SSD', price: -8000 },
+        { name: '4TB NVMe SSD', price: 15000 },
+        { name: '2TB NVMe SSD + 2TB HDD', price: 3000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  203: { // AURUM 2K Core
+    basePrice: 169990,
+    baseCpu: 'i5-13600KF',
+    baseGpu: 'RTX4070 SUPER',
+    image: 'photo/pc2_3.jpg',
+    name: 'AURUM 2K Core',
+    description: `Сбалансированная сборка для комфортного 2К гейминга.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: Intel Core i5-13600KF
+
+• Оперативная память: DDR5 16GB 5600Mhz Kingston
+
+• Видеокарта: NVIDIA RTX4070 SUPER 12GB
+
+• SSD: M2 NVME 1TB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH650W 80+ Bronze
+
+• Воздушное охлаждение Thermalright Peerless Assassin
+
+• Охлаждение: 3 ARGB вертушки
+
+• Корпус: Lian Li Lancool 205 Mesh RGB
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'Intel Core i5-13600KF', price: 0, selected: true },
+        { name: 'AMD Ryzen 7 7700X', price: 10000 },
+        { name: 'Intel Core i7-13700KF', price: 20000 },
+        { name: 'AMD Ryzen 5 7600', price: -5000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 4070 SUPER 12GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4070 TI SUPER 16GB', price: 20000 },
+        { name: 'NVIDIA RTX 4060 TI 16GB', price: -15000 },
+        { name: 'AMD RX 7700 XT 12GB', price: -20000 }
+      ],
+      ssd: [
+        { name: '1TB NVMe SSD', price: 0, selected: true },
+        { name: '2TB NVMe SSD', price: 8000 },
+        { name: '512GB NVMe SSD', price: -5000 },
+        { name: '1TB NVMe SSD + 1TB HDD', price: 2000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  204: { // AURUM 2K Starter
+    basePrice: 149990,
+    baseCpu: 'R5 7600',
+    baseGpu: 'RTX4060 Ti',
+    image: 'photo/pc2_4.jpg',
+    name: 'AURUM 2K Starter',
+    description: `Бюджетная сборка для входа в 2К гейминг.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: AMD Ryzen 5 7600
+
+• Оперативная память: DDR5 16GB 5600Mhz Kingston
+
+• Видеокарта: NVIDIA RTX4060 Ti 16GB
+
+• SSD: M2 NVME 1TB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH600W 80+ Bronze
+
+• Воздушное охлаждение Thermalright Assassin X
+
+• Охлаждение: 2 ARGB вертушки
+
+• Корпус: Lian Li Lancool 205 Mesh
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'AMD Ryzen 5 7600', price: 0, selected: true },
+        { name: 'Intel Core i5-13400F', price: 5000 },
+        { name: 'AMD Ryzen 7 7700X', price: 15000 },
+        { name: 'Intel Core i5-13600KF', price: 20000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 4060 Ti 16GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4070 SUPER 12GB', price: 25000 },
+        { name: 'NVIDIA RTX 4060 8GB', price: -10000 },
+        { name: 'AMD RX 7600 8GB', price: -15000 }
+      ],
+      ssd: [
+        { name: '1TB NVMe SSD', price: 0, selected: true },
+        { name: '2TB NVMe SSD', price: 8000 },
+        { name: '512GB NVMe SSD', price: -5000 },
+        { name: '1TB NVMe SSD + 1TB HDD', price: 2000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  // Товары FullHD Gaming
+  301: { // AURUM FHD Ultra
+    basePrice: 139990,
+    baseCpu: 'i5-13400F',
+    baseGpu: 'RTX4060 Ti',
+    image: 'photo/pc_fh1.jpg',
+    name: 'AURUM FHD Ultra',
+    description: `Топовая сборка для FullHD гейминга с отличной производительностью.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: Intel Core i5-13400F
+
+• Оперативная память: DDR4 16GB 3200Mhz Kingston
+
+• Видеокарта: NVIDIA RTX4060 Ti 16GB
+
+• SSD: M2 NVME 1TB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH600W 80+ Bronze
+
+• Воздушное охлаждение Thermalright Assassin X
+
+• Охлаждение: 2 ARGB вертушки
+
+• Корпус: Lian Li Lancool 205 Mesh
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'Intel Core i5-13400F', price: 0, selected: true },
+        { name: 'AMD Ryzen 5 7600', price: 8000 },
+        { name: 'Intel Core i5-13600KF', price: 15000 },
+        { name: 'AMD Ryzen 7 7700X', price: 20000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 4060 Ti 16GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4070 SUPER 12GB', price: 30000 },
+        { name: 'NVIDIA RTX 4060 8GB', price: -10000 },
+        { name: 'AMD RX 7600 8GB', price: -15000 }
+      ],
+      ssd: [
+        { name: '1TB NVMe SSD', price: 0, selected: true },
+        { name: '2TB NVMe SSD', price: 8000 },
+        { name: '512GB NVMe SSD', price: -5000 },
+        { name: '1TB NVMe SSD + 1TB HDD', price: 2000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  302: { // AURUM FHD Pro
+    basePrice: 119990,
+    baseCpu: 'R5 7600',
+    baseGpu: 'RTX4060',
+    image: 'photo/pc_fh2.jpg',
+    name: 'AURUM FHD Pro',
+    description: `Отличная сборка для FullHD гейминга с хорошим соотношением цена/производительность.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: AMD Ryzen 5 7600
+
+• Оперативная память: DDR5 16GB 5600Mhz Kingston
+
+• Видеокарта: NVIDIA RTX4060 8GB
+
+• SSD: M2 NVME 1TB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH550W 80+ Bronze
+
+• Воздушное охлаждение Thermalright Assassin X
+
+• Охлаждение: 2 ARGB вертушки
+
+• Корпус: Lian Li Lancool 205 Mesh
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'AMD Ryzen 5 7600', price: 0, selected: true },
+        { name: 'Intel Core i5-13400F', price: 5000 },
+        { name: 'AMD Ryzen 7 7700X', price: 15000 },
+        { name: 'Intel Core i5-13600KF', price: 20000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 4060 8GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4060 Ti 16GB', price: 15000 },
+        { name: 'NVIDIA RTX 3050 8GB', price: -8000 },
+        { name: 'AMD RX 6600 8GB', price: -10000 }
+      ],
+      ssd: [
+        { name: '1TB NVMe SSD', price: 0, selected: true },
+        { name: '2TB NVMe SSD', price: 8000 },
+        { name: '512GB NVMe SSD', price: -5000 },
+        { name: '1TB NVMe SSD + 1TB HDD', price: 2000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  303: { // AURUM FHD Core
+    basePrice: 99990,
+    baseCpu: 'i5-12400F',
+    baseGpu: 'RTX3060 Ti',
+    image: 'photo/pc_fh3.jpg',
+    name: 'AURUM FHD Core',
+    description: `Сбалансированная сборка для комфортного FullHD гейминга.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: Intel Core i5-12400F
+
+• Оперативная память: DDR4 16GB 3200Mhz Kingston
+
+• Видеокарта: NVIDIA RTX3060 Ti 8GB
+
+• SSD: M2 NVME 512GB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH500W 80+ Bronze
+
+• Воздушное охлаждение Thermalright Assassin X
+
+• Охлаждение: 2 вертушки
+
+• Корпус: Lian Li Lancool 205 Mesh
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'Intel Core i5-12400F', price: 0, selected: true },
+        { name: 'AMD Ryzen 5 5600', price: -3000 },
+        { name: 'Intel Core i5-13400F', price: 8000 },
+        { name: 'AMD Ryzen 5 7600', price: 10000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 3060 Ti 8GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4060 8GB', price: 10000 },
+        { name: 'NVIDIA RTX 3060 12GB', price: -5000 },
+        { name: 'AMD RX 6600 8GB', price: -8000 }
+      ],
+      ssd: [
+        { name: '512GB NVMe SSD', price: 0, selected: true },
+        { name: '1TB NVMe SSD', price: 5000 },
+        { name: '2TB NVMe SSD', price: 13000 },
+        { name: '512GB NVMe SSD + 1TB HDD', price: 2000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  },
+  304: { // AURUM FHD Starter
+    basePrice: 89990,
+    baseCpu: 'R5 5600',
+    baseGpu: 'RTX3050',
+    image: 'photo/pc_fh4.jpg',
+    name: 'AURUM FHD Starter',
+    description: `Бюджетная сборка для входа в FullHD гейминг.
+
+Абсолютно любые комплектующие ПК можно изменить по Вашим пожеланиям!
+
+Характеристики:
+
+• Процессор: AMD Ryzen 5 5600
+
+• Оперативная память: DDR4 16GB 3200Mhz Kingston
+
+• Видеокарта: NVIDIA RTX3050 8GB
+
+• SSD: M2 NVME 512GB Kingston KC3000
+
+• Блок питания: Phanteks AMP GH450W 80+ Bronze
+
+• Воздушное охлаждение Thermalright Assassin X
+
+• Охлаждение: 2 вертушки
+
+• Корпус: Lian Li Lancool 205 Mesh
+
+⚙️ Полная настройка и сборка под ключ!
+
+✔️ Windows, все необходимые драйвера, программы уже установлены!`,
+    options: {
+      cpu: [
+        { name: 'AMD Ryzen 5 5600', price: 0, selected: true },
+        { name: 'Intel Core i5-12400F', price: 3000 },
+        { name: 'AMD Ryzen 5 7600', price: 10000 },
+        { name: 'Intel Core i5-13400F', price: 11000 }
+      ],
+      gpu: [
+        { name: 'NVIDIA RTX 3050 8GB', price: 0, selected: true },
+        { name: 'NVIDIA RTX 4060 8GB', price: 15000 },
+        { name: 'NVIDIA GTX 1660 SUPER 6GB', price: -5000 },
+        { name: 'AMD RX 6600 8GB', price: -3000 }
+      ],
+      ssd: [
+        { name: '512GB NVMe SSD', price: 0, selected: true },
+        { name: '1TB NVMe SSD', price: 5000 },
+        { name: '256GB NVMe SSD', price: -3000 },
+        { name: '512GB NVMe SSD + 1TB HDD', price: 2000 }
+      ],
+      warranty: [
+        { name: '1 год', price: 0, selected: true },
+        { name: '2 года', price: 5000 },
+        { name: '3 года', price: 10000 },
+        { name: '5 лет', price: 20000 }
+      ]
+    }
+  }
+};
+
+// Сводные данные по категориям для повторного использования
+const CATEGORY_PRODUCTS = {
+  '4k': PRODUCTS_4K,
+  '2k': PRODUCTS_2K,
+  'fullhd': PRODUCTS_FULLHD
+};
+
+const CATEGORY_PLACEHOLDERS = {
+  '4k': '4K.png',
+  '2k': '2K.png',
+  'fullhd': 'FullHD.png'
+};
+
+// Состояние сортировки/поиска/фильтров по категориям
+const CATEGORY_STATE = {
+  '4k': { sort: null, price: { from: null, to: null }, search: '' },
+  '2k': { sort: null, price: { from: null, to: null }, search: '' },
+  'fullhd': { sort: null, price: { from: null, to: null }, search: '' }
+};
+
+// Текущая категория, для которой открыты модальные окна сортировки/фильтров
+let currentModalCategory = null;
+
+// -----------------------------
+// Утилиты
+// -----------------------------
+const qs = sel => document.querySelector(sel);
+const qsa = sel => Array.from(document.querySelectorAll(sel));
+
+// форматирование цены в локализованный вид
+function formatPrice(n) { return n.toLocaleString() + ' ₽'; }
+
+// безопасные обёртки для localStorage — возвращают fallback при ошибке
+function safeLocalStorageGet(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
+  catch (e) { console.warn('localStorage read failed', e); return fallback; }
+}
+function safeLocalStorageSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); }
+  catch (e) { console.warn('localStorage write failed', e); }
+}
+
+// debounce для оптимизации ввода поиска
+function debounce(fn, ms=300) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(()=>fn(...args), ms); };
+}
+
+// -----------------------------
+// Система истории навигации
+// -----------------------------
+const navigationHistory = [];
+let isNavigatingBack = false;
+
+// Добавить страницу в историю
+function addToHistory(pageId, pageType = 'tab'){
+  if(isNavigatingBack) {
+    isNavigatingBack = false;
+    return; // Не добавляем в историю при возврате назад
+  }
+  
+  // Не добавляем текущую страницу, если она уже последняя в истории
+  if(navigationHistory.length > 0 && 
+     navigationHistory[navigationHistory.length - 1].id === pageId &&
+     navigationHistory[navigationHistory.length - 1].type === pageType){
+    return;
+  }
+  
+  navigationHistory.push({ id: pageId, type: pageType });
+  updateBackButton();
+}
+
+// Вернуться назад
+function goBack(){
+  // Проверяем, находимся ли мы на странице privacy или terms
+  const currentTab = qsa('.tab').find(tab => tab.getAttribute('aria-hidden') === 'false');
+  if(currentTab && (currentTab.id === 'privacy' || currentTab.id === 'terms')){
+    // Если мы на privacy или terms, сразу возвращаемся в профиль без использования истории
+    isNavigatingBack = true;
+    openTab('profile');
+    isNavigatingBack = false;
+    updateBackButton();
+    return;
+  }
+  
+  if(navigationHistory.length <= 1) {
+    // Если в истории только текущая страница или пусто, идем на каталог
+    navigationHistory.length = 0;
+    isNavigatingBack = true;
+    openTab('catalog');
+    // Добавляем каталог обратно в историю после перехода
+    setTimeout(() => {
+      navigationHistory.length = 0;
+      addToHistory('catalog', 'tab');
+      updateBackButton();
+    }, 0);
+    return;
+  }
+  
+  // Удаляем текущую страницу из истории
+  navigationHistory.pop();
+  
+  // Пропускаем privacy и terms из истории, если они там есть
+  while(navigationHistory.length > 0){
+    const lastPage = navigationHistory[navigationHistory.length - 1];
+    if(lastPage && (lastPage.id === 'privacy' || lastPage.id === 'terms')){
+      navigationHistory.pop();
+    } else {
+      break;
+    }
+  }
+  
+  // Получаем предыдущую страницу
+  const previousPage = navigationHistory[navigationHistory.length - 1];
+  
+  if(!previousPage) {
+    // Если истории нет, идем на каталог
+    navigationHistory.length = 0;
+    isNavigatingBack = true;
+    openTab('catalog');
+    // Добавляем каталог обратно в историю после перехода
+    setTimeout(() => {
+      navigationHistory.length = 0;
+      addToHistory('catalog', 'tab');
+      updateBackButton();
+    }, 0);
+    return;
+  }
+  
+  isNavigatingBack = true;
+  
+  // Переходим на предыдущую страницу
+  if(previousPage.type === 'tab'){
+    openTab(previousPage.id);
+  } else if(previousPage.type === 'category'){
+    openCategory(previousPage.id);
+  } else if(previousPage.type === 'configurator'){
+    openConfigurator(previousPage.id);
+  }
+  
+  // Сбрасываем флаг после небольшой задержки
+  setTimeout(() => {
+    isNavigatingBack = false;
+    updateBackButton();
+  }, 0);
+}
+
+// Обновить видимость кнопки "Назад"
+function updateBackButton(){
+  const tg = safeTelegram();
+  
+  // Используем встроенную кнопку "Назад" Telegram WebApp, если доступна
+  if(tg && tg.BackButton){
+    if(navigationHistory.length > 1){
+      tg.BackButton.show();
+      tg.BackButton.onClick(goBack);
+    } else {
+      tg.BackButton.hide();
+    }
+  } else {
+    // Fallback: используем HTML кнопку
+    const backButton = qs('#back-button');
+    if(!backButton) return;
+    
+    // Показываем кнопку, если в истории больше 1 страницы
+    if(navigationHistory.length > 1){
+      backButton.classList.remove('back-button-hidden');
+      backButton.classList.add('back-button-visible');
+    } else {
+      backButton.classList.remove('back-button-visible');
+      backButton.classList.add('back-button-hidden');
+    }
+  }
+}
+
+// Обработчик HTML кнопки "Назад" (fallback)
+const backButton = qs('#back-button');
+if(backButton){
+  backButton.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    goBack();
+  });
+}
+
+// поиск товара по всем категориям
+function findProductById(id){
+  const idStr = String(id);
+  const p4k = PRODUCTS_4K.find(x=>String(x.id)===idStr);
+  if(p4k) return p4k;
+  const p2k = PRODUCTS_2K.find(x=>String(x.id)===idStr);
+  if(p2k) return p2k;
+  const pfhd = PRODUCTS_FULLHD.find(x=>String(x.id)===idStr);
+  if(pfhd) return pfhd;
+  const pGeneric = PRODUCTS.find(x=>String(x.id)===idStr);
+  return pGeneric || null;
+}
+
+// Проверка, изменена ли конфигурация по сравнению с базовой
+function isConfigChanged(productId, config){
+  const productConfig = PRODUCT_CONFIGS[productId];
+  if(!productConfig) return false;
+  
+  // Получаем базовые опции (первые в списке с selected: true или price: 0)
+  const baseCpu = productConfig.options.cpu.find(o => o.selected || o.price === 0) || productConfig.options.cpu[0];
+  const baseGpu = productConfig.options.gpu.find(o => o.selected || o.price === 0) || productConfig.options.gpu[0];
+  const baseSsd = productConfig.options.ssd.find(o => o.selected || o.price === 0) || productConfig.options.ssd[0];
+  const baseWarranty = productConfig.options.warranty.find(o => o.selected || o.price === 0) || productConfig.options.warranty[0];
+  
+  // Проверяем, изменились ли CPU или GPU (основные характеристики)
+  return config.cpu.name !== baseCpu.name || config.gpu.name !== baseGpu.name;
+}
+
+// -----------------------------
+// Классы состояния: Cart & Favorites
+// -----------------------------
+class Cart {
+  constructor(storageKey='aurum_cart'){
+    this.key = storageKey;
+    this.items = safeLocalStorageGet(this.key, []); // [{id, qty}]
+  }
+  // добавить товар (если есть — увеличить количество)
+  add(productId, qty=1){
+    const found = this.items.find(i=>String(i.id)===String(productId));
+    if(found) found.qty += qty; else this.items.push({id: productId, qty});
+    safeLocalStorageSet(this.key, this.items);
+  }
+  // удалить товар полностью
+  remove(productId){ this.items = this.items.filter(i=>String(i.id)!==String(productId)); safeLocalStorageSet(this.key,this.items); }
+  // очистить корзину
+  clear(){ this.items = []; safeLocalStorageSet(this.key, this.items); }
+  // вернуть расширенный список товаров (объект продукта + qty)
+  getItemsFull(){
+    return this.items.map(it => {
+      const idStr = String(it.id);
+      // Проверяем, является ли это конфигурированным товаром
+      if(idStr.startsWith('config-')){
+        const configData = safeLocalStorageGet(`config_${idStr}`, null);
+        if(configData){
+          const isChanged = isConfigChanged(configData.productId, configData.config);
+          // Всегда показываем стоковое название
+          const name = configData.baseName;
+          // В specs показываем новые элементы только если конфигурация изменена
+          let specs;
+          if(isChanged){
+            // Если конфигурация изменена, показываем новые элементы
+            specs = `${configData.config.cpu.name}, ${configData.config.gpu.name}`;
+          } else {
+            // Если конфигурация не изменена, показываем базовые характеристики из исходного товара
+            const baseProduct = findProductById(configData.productId);
+            if(baseProduct){
+              specs = `${baseProduct.cpu || ''}${baseProduct.cpu && baseProduct.gpu ? ', ' : ''}${baseProduct.gpu || ''}`;
+            } else {
+              specs = `${configData.config.cpu.name}, ${configData.config.gpu.name}`;
+            }
+          }
+          
+          return {
+            id: it.id,
+            name: name,
+            price: configData.price,
+            image: configData.image,
+            specs: specs,
+            qty: it.qty
+          };
+        }
+      }
+      // Проверяем, является ли это ПК
+      if(idStr.startsWith('pc-')){
+        const categoryId = idStr.replace('pc-', '');
+        const pcConfig = PC_CONFIGS[categoryId];
+        if(pcConfig){
+          return {
+            id: it.id,
+            name: pcConfig.name,
+            price: pcConfig.price,
+            image: pcConfig.image,
+            specs: `${pcConfig.specs.cpu}, ${pcConfig.specs.gpu}`,
+            qty: it.qty
+          };
+        }
+      }
+      // Проверяем товары из категории 4K Gaming
+      const product = findProductById(idStr);
+      return product ? {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.image,
+        specs: `${product.cpu || ''}${product.cpu && product.gpu ? ', ' : ''}${product.gpu || product.specs || ''}`.trim(),
+        qty: it.qty
+      } : null;
+    }).filter(Boolean);
+  }
+  // общее количество позиций
+  getCount(){ return this.items.reduce((s,i)=>s+i.qty,0); }
+  // общая сумма
+  getTotal(){ return this.getItemsFull().reduce((s,p)=>s + p.price * p.qty, 0); }
+}
+
+class Favorites {
+  constructor(storageKey='aurum_fav'){ this.key = storageKey; this.ids = safeLocalStorageGet(this.key, []); }
+  // переключить статус избранного (нормализуем ID для сравнения)
+  toggle(id){ 
+    const normalizedId = String(id);
+    const idx = this.ids.findIndex(storedId => String(storedId) === normalizedId);
+    if(idx>-1) this.ids.splice(idx,1); 
+    else this.ids.push(id); 
+    safeLocalStorageSet(this.key,this.ids); 
+  }
+  // проверить наличие (нормализуем ID для сравнения)
+  has(id){ return this.ids.some(storedId => String(storedId) === String(id)); }
+  // вернуть копию списка
+  list(){ return this.ids.slice(); }
+}
+
+// -----------------------------
+// Рендереры UI
+// -----------------------------
+const cart = new Cart();
+const favs = new Favorites();
+
+// строка классов для карточек категории — чтобы не дублировать много классов
+const CATEGORY_CARD_CLASSES = [
+  'rounded-md overflow-hidden flex flex-col cursor-pointer w-full max-w-[280px] mx-auto',
+  'card-base',
+  'card-pressable',
+  'shadow-[0_8px_20px_rgba(0,0,0,0.45)]',
+  'hover:shadow-[0_12px_28px_rgba(251,191,36,0.25)]',
+  'hover:-translate-y-1 transition-all'
+].join(' ');
+
+// отрисовка категорий
+function renderCategories() {
+  const container = qs('#categories');
+  container.innerHTML = '';
+
+  // Сетка: всегда 2 колонки
+  container.className = 'grid grid-cols-2 gap-3';
+
+  // используем DocumentFragment для минимизации репейнтов
+  const frag = document.createDocumentFragment();
+
+  CATEGORIES.forEach(cat => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.dataset.category = cat.id;
+    card.className = CATEGORY_CARD_CLASSES;
+
+    card.innerHTML = `
+      <div class="w-full h-31 bg-slate-900 flex items-center justify-center p-0">
+        <img src="${cat.image}" alt="${cat.name}" class="w-full h-full object-cover" loading="lazy">
+      </div>
+      <div class="p-1 text-center">
+        <h3 class="font-semibold text-base text-amber-300 tracking-wide">${cat.name}</h3>
+      </div>
+    `;
+
+    card.addEventListener('click', () => openCategory(cat.id));
+    frag.appendChild(card);
+  });
+
+  container.appendChild(frag);
+}
+
+// универсальная отрисовка списка товаров в указанном контейнере
+function renderProducts(list=PRODUCTS, where='#product-list'){
+  const container = qs(where);
+  container.innerHTML = '';
+  if(!list.length){ container.innerHTML = '<div class="text-center text-amber-300 py-8">Товары не найдены</div>'; return; }
+
+  const frag = document.createDocumentFragment();
+
+  list.forEach(p => {
+    const el = document.createElement('article');
+    el.className = 'bg-slate-800/70 p-3 rounded-xl border border-amber-800 flex gap-3 items-center';
+    el.innerHTML = `
+      <img src="${p.image}" alt="${p.name}" class="w-24 h-24 object-contain bg-slate-700 rounded-lg p-1" loading="lazy">
+      <div class="flex-1">
+        <h4 class="font-bold text-amber-300">${p.name}</h4>
+        <p class="text-xs text-blue-200">${p.specs || ''}</p>
+      </div>
+      <div class="text-right">
+        <div class="text-lg font-bold text-amber-400">${formatPrice(p.price)}</div>
+        <div class="mt-2 flex gap-2 justify-end">
+          <button class="add-fav text-amber-300" data-id="${p.id}" aria-pressed="${favs.has(p.id)}"><i class="fas fa-heart"></i></button>
+          <button class="add-cart bg-amber-500 text-slate-900 px-3 py-1 rounded-md font-semibold" data-id="${p.id}">В корзину</button>
+        </div>
+      </div>
+    `;
+
+    // добавляем обработчики событий напрямую — их немного, это упрощает управление состоянием
+    el.querySelector('.add-cart').addEventListener('click', (e)=>{
+      cart.add(p.id, 1);
+      showCartBadge();
+      // небольшая анимация на кнопке
+      e.currentTarget.classList.add('pop');
+      setTimeout(()=>e.currentTarget.classList.remove('pop'), 480);
+    });
+    el.querySelector('.add-fav').addEventListener('click', (e)=>{
+      e.stopPropagation(); // Предотвращаем всплытие события
+      favs.toggle(p.id);
+      e.currentTarget.setAttribute('aria-pressed', favs.has(p.id));
+      // Визуальная обратная связь
+      if(favs.has(p.id)){
+        e.currentTarget.classList.add('text-red-500');
+        e.currentTarget.classList.remove('text-amber-300');
+      } else {
+        e.currentTarget.classList.remove('text-red-500');
+        e.currentTarget.classList.add('text-amber-300');
+      }
+      updateProfileFavCount();
+      showFavBadge();
+    });
+
+    frag.appendChild(el);
+  });
+
+  container.appendChild(frag);
+}
+
+// отрисовка корзины
+function renderCart(){
+  const items = cart.getItemsFull();
+  const container = qs('#cart-items');
+  const empty = qs('#cart-empty');
+  const checkoutContainer = qs('#cart-checkout');
+  if(!items.length){ 
+    container.innerHTML=''; 
+    empty.classList.remove('hidden'); 
+    checkoutContainer.innerHTML = '';
+    return; 
+  }
+  empty.classList.add('hidden');
+  container.innerHTML = '';
+
+  const frag = document.createDocumentFragment();
+
+  items.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'bg-slate-800/70 rounded-xl p-3 flex gap-3 border border-amber-800 items-center';
+    el.innerHTML = `
+      <img src="${p.image}" class="w-20 h-20 flex-shrink-0 object-contain bg-slate-700 rounded-lg p-1" loading="lazy">
+      <div class="flex-1 min-w-0">
+        <h4 class="font-bold text-base text-amber-300">${p.name}</h4>
+        <p class="text-blue-200 text-xs line-clamp-2">${p.specs || ''}</p>
+      </div>
+      <div class="flex-shrink-0 text-right">
+        <div class="text-lg font-bold text-amber-400 whitespace-nowrap">${formatPrice(p.price * p.qty)}</div>
+        <div class="mt-1 flex items-center justify-end gap-2">
+          <button class="text-sm px-2 py-1 bg-slate-700 rounded" data-action="dec" data-id="${p.id}">-</button>
+          <span class="text-sm">${p.qty}</span>
+          <button class="text-sm px-2 py-1 bg-slate-700 rounded" data-action="inc" data-id="${p.id}">+</button>
+          <button class="text-red-400 hover:text-red-300 ml-2 px-2 py-1 rounded transition" data-action="remove" data-id="${p.id}" title="Удалить">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    `;
+    frag.appendChild(el);
+  });
+
+  container.appendChild(frag);
+
+  // делегируем обработку кнопок изменения количества
+  container.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', (e)=>{
+      const id = e.currentTarget.dataset.id; // Сохраняем ID как есть (может быть строкой для ПК)
+      const action = e.currentTarget.dataset.action;
+      // Ищем запись с учетом того, что ID может быть строкой или числом
+      const entry = cart.items.find(x => String(x.id) === String(id));
+      if(!entry) return;
+      if(action==='inc'){ entry.qty++; }
+      else if(action==='dec'){ entry.qty = Math.max(1, entry.qty-1); }
+      else if(action==='remove'){ cart.remove(id); }
+      safeLocalStorageSet(cart.key, cart.items);
+      renderCart(); showCartBadge();
+    });
+  });
+
+  // Рендерим блок оформления заказа
+  renderCheckoutBlock();
+}
+
+// Рендеринг блока оформления заказа
+function renderCheckoutBlock(){
+  const checkoutContainer = qs('#cart-checkout');
+  const total = cart.getTotal();
+  
+  checkoutContainer.innerHTML = `
+    <div class="bg-gradient-to-r from-amber-900 to-yellow-900 rounded-xl p-4 border-2 border-amber-600 shadow-xl">
+      <div class="space-y-3 mb-4">
+        <div class="flex justify-between items-center">
+          <span class="text-base font-medium text-amber-200">Товары</span>
+          <span class="text-lg font-bold text-amber-300">${formatPrice(total)}</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-base font-medium text-amber-200">Итого</span>
+          <span class="text-xl font-bold text-amber-300">${formatPrice(total)}</span>
+        </div>
+      </div>
+      <button id="checkout-btn" class="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 py-2.5 rounded-lg text-sm font-bold text-slate-900 transition transform hover:scale-105">
+        ОФОРМИТЬ ЗАКАЗ
+      </button>
+    </div>
+  `;
+  
+  // Привязываем обработчик к кнопке оформления заказа (новый элемент, старые обработчики удалены через innerHTML)
+  const checkoutBtn = qs('#checkout-btn');
+  if(checkoutBtn){
+    checkoutBtn.addEventListener('click', handleCheckout);
+  }
+}
+
+// Обработчик оформления заказа
+function handleCheckout(){
+  if(cart.getItemsFull().length === 0) return alert('Корзина пуста');
+  // Открываем модальное окно оформления заказа
+  const checkoutModal = qs('#checkout-modal');
+  if(checkoutModal){
+    checkoutModal.classList.remove('hidden');
+    // Сбрасываем формы
+    resetCheckoutForms();
+    // Устанавливаем активной вкладку доставки
+    switchCheckoutTab('delivery');
+  }
+}
+
+// Сброс форм оформления заказа
+function resetCheckoutForms(){
+  qs('#delivery-name').value = '';
+  qs('#delivery-phone').value = '';
+  qs('#delivery-address').value = '';
+  qs('#delivery-comment').value = '';
+  qs('#pickup-name').value = '';
+  qs('#pickup-phone').value = '';
+  qs('#pickup-comment').value = '';
+  // Убираем классы ошибок
+  document.querySelectorAll('#checkout-modal input, #checkout-modal textarea').forEach(el => {
+    el.classList.remove('border-red-500');
+  });
+}
+
+// Переключение вкладок оформления заказа
+function switchCheckoutTab(tab){
+  const deliveryTab = qs('#delivery-tab');
+  const pickupTab = qs('#pickup-tab');
+  const deliveryForm = qs('#delivery-form');
+  const pickupForm = qs('#pickup-form');
+  
+  if(tab === 'delivery'){
+    deliveryTab.classList.add('text-amber-400', 'border-b-2', 'border-amber-400');
+    deliveryTab.classList.remove('text-slate-400');
+    pickupTab.classList.remove('text-amber-400', 'border-b-2', 'border-amber-400');
+    pickupTab.classList.add('text-slate-400');
+    deliveryForm.classList.remove('hidden');
+    pickupForm.classList.add('hidden');
+  } else {
+    pickupTab.classList.add('text-amber-400', 'border-b-2', 'border-amber-400');
+    pickupTab.classList.remove('text-slate-400');
+    deliveryTab.classList.remove('text-amber-400', 'border-b-2', 'border-amber-400');
+    deliveryTab.classList.add('text-slate-400');
+    pickupForm.classList.remove('hidden');
+    deliveryForm.classList.add('hidden');
+  }
+}
+
+// Валидация формы оформления заказа
+function validateCheckoutForm(isDelivery){
+  let isValid = true;
+  const fields = [];
+  
+  if(isDelivery){
+    const name = qs('#delivery-name');
+    const phone = qs('#delivery-phone');
+    const address = qs('#delivery-address');
+    
+    fields.push({el: name, required: true});
+    fields.push({el: phone, required: true});
+    fields.push({el: address, required: true});
+  } else {
+    const name = qs('#pickup-name');
+    const phone = qs('#pickup-phone');
+    
+    fields.push({el: name, required: true});
+    fields.push({el: phone, required: true});
+  }
+  
+  fields.forEach(field => {
+    if(field.required && !field.el.value.trim()){
+      field.el.classList.add('border-red-500');
+      isValid = false;
+    } else {
+      field.el.classList.remove('border-red-500');
+    }
+  });
+  
+  return isValid;
+}
+
+// Получение данных заказа
+function getCheckoutData(isDelivery){
+  if(isDelivery){
+    return {
+      type: 'delivery',
+      name: qs('#delivery-name').value.trim(),
+      phone: qs('#delivery-phone').value.trim(),
+      address: qs('#delivery-address').value.trim(),
+      comment: qs('#delivery-comment').value.trim()
+    };
+  } else {
+    return {
+      type: 'pickup',
+      name: qs('#pickup-name').value.trim(),
+      phone: qs('#pickup-phone').value.trim(),
+      address: 'г Краснодар, ул Московская, д 25',
+      comment: qs('#pickup-comment').value.trim()
+    };
+  }
+}
+
+// обновить итоговую сумму на панели оформления (для обратной совместимости)
+function updateTotal(){ 
+  const totalEl = qs('#total');
+  if(totalEl) totalEl.textContent = formatPrice(cart.getTotal());
+  // Обновляем блок оформления заказа, если он существует
+  const checkoutContainer = qs('#cart-checkout');
+  if(checkoutContainer && checkoutContainer.innerHTML.trim() !== ''){
+    renderCheckoutBlock();
+  }
+}
+
+// отрисовка избранного
+function renderFavorites(){
+  const favIds = favs.list();
+  const list = favIds.map(id => {
+    // Проверяем, является ли это конфигурированным товаром
+    const idStr = String(id);
+    if(idStr.startsWith('config-')){
+      const configData = safeLocalStorageGet(`fav_config_${idStr}`, null);
+      if(configData){
+        const isChanged = isConfigChanged(configData.productId, configData.config);
+        // Всегда показываем стоковое название
+        const name = configData.baseName;
+        // В specs показываем новые элементы только если конфигурация изменена
+        let specs;
+        if(isChanged){
+          // Если конфигурация изменена, показываем новые элементы
+          specs = `${configData.config.cpu.name}, ${configData.config.gpu.name}`;
+        } else {
+          // Если конфигурация не изменена, показываем базовые характеристики из исходного товара
+          const baseProduct = findProductById(configData.productId);
+          if(baseProduct){
+            specs = `${baseProduct.cpu || ''}${baseProduct.cpu && baseProduct.gpu ? ', ' : ''}${baseProduct.gpu || ''}`;
+          } else {
+            specs = `${configData.config.cpu.name}, ${configData.config.gpu.name}`;
+          }
+        }
+        
+        return {
+          id: id,
+          name: name,
+          price: configData.price,
+          image: configData.image,
+          specs: specs
+        };
+      }
+    }
+    // Проверяем, является ли это ПК
+    if(idStr.startsWith('pc-')){
+      const categoryId = idStr.replace('pc-', '');
+      const pcConfig = PC_CONFIGS[categoryId];
+      if(pcConfig){
+        return {
+          id: id,
+          name: pcConfig.name,
+          price: pcConfig.price,
+          image: pcConfig.image,
+          specs: `${pcConfig.specs.cpu}, ${pcConfig.specs.gpu}`
+        };
+      }
+    }
+    const p = findProductById(idStr);
+    return p ? {
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      image: p.image,
+      specs: `${p.cpu || ''}${p.cpu && p.gpu ? ', ' : ''}${p.gpu || p.specs || ''}`.trim()
+    } : null;
+  }).filter(Boolean);
+  
+  const el = qs('#favorites-list');
+  const empty = qs('#favorites-empty');
+  if(!list.length){ 
+    el.innerHTML=''; 
+    el.style.display = 'none';
+    empty.classList.remove('hidden'); 
+    return; 
+  }
+  empty.classList.add('hidden');
+  el.style.display = '';
+  el.innerHTML='';
+
+  const frag = document.createDocumentFragment();
+
+  list.forEach(p => {
+    // Получаем описание для конфигурированных товаров
+    let description = '';
+    const idStr = String(p.id);
+    if(idStr.startsWith('config-')){
+      const configData = safeLocalStorageGet(`fav_config_${idStr}`, null);
+      if(configData && PRODUCT_CONFIGS[configData.productId]){
+        // Берем первые 2 строки описания
+        const fullDesc = PRODUCT_CONFIGS[configData.productId].description;
+        const lines = fullDesc.split('\n').filter(l => l.trim());
+        description = lines.slice(0, 2).join(' ').substring(0, 120);
+        if(description.length < fullDesc.length) description += '...';
+      }
+    } else {
+      // Для обычных товаров используем specs
+      description = p.specs || '';
+    }
+
+    const item = document.createElement('div');
+    item.className = 'bg-slate-800/70 p-3 rounded-xl border border-amber-800 flex items-center gap-3';
+    item.innerHTML = `
+      <img src="${p.image}" class="w-20 h-20 flex-shrink-0 object-contain bg-slate-700 rounded-lg p-1" loading="lazy">
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-amber-300">${p.name}</div>
+        <div class="text-sm text-blue-200 line-clamp-2">${description}</div>
+      </div>
+      <div class="flex-shrink-0 text-right">
+        <div class="text-amber-400 font-bold whitespace-nowrap">${formatPrice(p.price)}</div>
+        <div class="mt-2 flex items-center justify-end gap-2">
+          <button class="add-cart inline-block bg-amber-500 text-slate-900 px-3 py-1 rounded-md hover:bg-amber-600 transition whitespace-nowrap" data-id="${p.id}">В корзину</button>
+          <button class="remove-fav text-red-400 hover:text-red-300 px-3 py-1 rounded-md transition flex-shrink-0" data-id="${p.id}" title="Удалить из избранного">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    `;
+    item.querySelector('.add-cart').addEventListener('click', (e)=>{ 
+      e.stopPropagation();
+      const idStr = String(p.id);
+      // Если это конфигурированный товар из избранного, создаем новый уникальный ID для корзины
+      if(idStr.startsWith('config-')){
+        const configData = safeLocalStorageGet(`fav_config_${idStr}`, null);
+        if(configData){
+          const newConfigId = `config-${configData.productId}-${Date.now()}`;
+          cart.add(newConfigId, 1);
+          safeLocalStorageSet(`config_${newConfigId}`, configData);
+        } else {
+          cart.add(p.id, 1);
+        }
+      } else {
+        cart.add(p.id,1);
+      }
+      showCartBadge(); 
+    });
+    item.querySelector('.remove-fav').addEventListener('click', (e)=>{ 
+      e.stopPropagation();
+      favs.toggle(p.id);
+      renderFavorites();
+      updateProfileFavCount();
+      showFavBadge();
+    });
+    frag.appendChild(item);
+  });
+
+  el.appendChild(frag);
+}
+
+// обновить счётчик избранного в профиле
+function updateProfileFavCount(){ 
+  const el = qs('#profile-fav-count');
+  if(el) el.textContent = favs.list().length; 
+}
+
+// показать/скрыть бейдж корзины в нижней навигации
+function showCartBadge(){
+  const n = cart.getCount();
+  const badge = qs('#bottom-cart-count');
+  badge.textContent = n || '';
+  badge.classList.toggle('hidden', n===0);
+}
+
+// показать/скрыть бейдж избранного в нижней навигации
+function showFavBadge(){
+  const n = favs.list().length;
+  const badge = qs('#bottom-fav-count');
+  badge.textContent = n || '';
+  badge.classList.toggle('hidden', n===0);
+}
+
+// -----------------------------
+// Роутинг / вкладки
+// -----------------------------
+// Переменные для хранения обработчиков прокрутки
+let cartScrollHandler = null;
+let favoritesScrollHandler = null;
+
+// Функция для открытия вкладки без добавления в историю навигации
+function openTabWithoutHistory(tabId){
+  const wasNavigatingBack = isNavigatingBack;
+  isNavigatingBack = true; // Временно устанавливаем флаг, чтобы не добавить в историю
+  openTab(tabId);
+  isNavigatingBack = wasNavigatingBack;
+}
+
+function openTab(tabId){
+  // Добавляем в историю только если это не возврат назад
+  if(!isNavigatingBack){
+    addToHistory(tabId, 'tab');
+  }
+  
+  qsa('.tab').forEach(s=> s.setAttribute('aria-hidden','true'));
+  const target = qs('#' + tabId);
+  if(target) target.setAttribute('aria-hidden','false');
+
+  // Скрыть/показать поисковую строку и header в зависимости от вкладки
+  const searchHeader = qs('header');
+  const mainContainer = qs('main');
+  const cartHeader = qs('#cart-header');
+  const favoritesHeader = qs('#favorites-header');
+  const checkoutBar = qs('#checkout-bar');
+  const searchInput = qs('#search').parentElement;
+  
+  // Удаляем предыдущие обработчики прокрутки, если они были
+  if(cartScrollHandler){
+    mainContainer.removeEventListener('scroll', cartScrollHandler);
+    window.removeEventListener('scroll', cartScrollHandler);
+    cartScrollHandler = null;
+  }
+  if(favoritesScrollHandler){
+    mainContainer.removeEventListener('scroll', favoritesScrollHandler);
+    window.removeEventListener('scroll', favoritesScrollHandler);
+    favoritesScrollHandler = null;
+  }
+  
+  if(tabId === 'cart'){
+    // В корзине: скрываем весь header, показываем заголовок "Корзина"
+    searchHeader.classList.add('hidden');
+    cartHeader.classList.remove('hidden');
+    cartHeader.classList.remove('cart-header-hidden'); // Убираем класс скрытия при прокрутке
+    favoritesHeader.classList.add('hidden');
+    mainContainer.style.overflowX = 'visible';
+    // Показываем нижнюю навигацию
+    const bottomNav = qs('nav');
+    if(bottomNav) bottomNav.classList.remove('hidden');
+    
+    // Добавляем обработчик прокрутки для скрытия заголовка при прокрутке вниз
+    cartScrollHandler = () => {
+      // Проверяем прокрутку на main элементе (основной контейнер с overflow-y-auto)
+      const mainScrollTop = mainContainer.scrollTop || 0;
+      // Также проверяем прокрутку на window (на случай, если прокрутка происходит на уровне страницы)
+      const windowScrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      // Используем максимальное значение
+      const scrollTop = Math.max(mainScrollTop, windowScrollTop);
+      
+      // Скрываем заголовок при прокрутке вниз больше 50px
+      if(scrollTop > 50){
+        cartHeader.classList.add('cart-header-hidden');
+      } else {
+        cartHeader.classList.remove('cart-header-hidden');
+      }
+    };
+    
+    // Добавляем обработчик прокрутки на main элемент
+    mainContainer.addEventListener('scroll', cartScrollHandler, { passive: true });
+    // Также отслеживаем прокрутку на window (на случай, если прокрутка происходит на уровне страницы)
+    window.addEventListener('scroll', cartScrollHandler, { passive: true });
+    // Проверяем начальное состояние сразу и после небольшой задержки
+    cartScrollHandler();
+    setTimeout(() => cartScrollHandler(), 50);
+  } else if(tabId === 'favorites'){
+    // В избранном: скрываем весь header, показываем заголовок "Избранное"
+    searchHeader.classList.add('hidden');
+    cartHeader.classList.add('hidden');
+    favoritesHeader.classList.remove('hidden');
+    favoritesHeader.classList.remove('favorites-header-hidden'); // Убираем класс скрытия при прокрутке
+    mainContainer.style.overflowX = 'visible';
+    // Показываем нижнюю навигацию
+    const bottomNav = qs('nav');
+    if(bottomNav) bottomNav.classList.remove('hidden');
+    
+    // Добавляем обработчик прокрутки для скрытия заголовка при прокрутке вниз
+    favoritesScrollHandler = () => {
+      // Проверяем прокрутку на main элементе (основной контейнер с overflow-y-auto)
+      const mainScrollTop = mainContainer.scrollTop || 0;
+      // Также проверяем прокрутку на window (на случай, если прокрутка происходит на уровне страницы)
+      const windowScrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      // Используем максимальное значение
+      const scrollTop = Math.max(mainScrollTop, windowScrollTop);
+      
+      // Скрываем заголовок при прокрутке вниз больше 50px
+      if(scrollTop > 50){
+        favoritesHeader.classList.add('favorites-header-hidden');
+      } else {
+        favoritesHeader.classList.remove('favorites-header-hidden');
+      }
+    };
+    
+    // Добавляем обработчик прокрутки на main элемент
+    mainContainer.addEventListener('scroll', favoritesScrollHandler, { passive: true });
+    // Также отслеживаем прокрутку на window (на случай, если прокрутка происходит на уровне страницы)
+    window.addEventListener('scroll', favoritesScrollHandler, { passive: true });
+    // Проверяем начальное состояние сразу и после небольшой задержки
+    favoritesScrollHandler();
+    setTimeout(() => favoritesScrollHandler(), 50);
+  } else if(tabId === 'profile' || tabId === 'reviews' || tabId === 'orders' || tabId === 'deposits' || tabId === 'bonuses' || tabId === 'terms' || tabId === 'privacy'){
+    // В профиле и связанных страницах: скрываем весь header и нижнюю навигацию
+    searchHeader.classList.add('hidden');
+    cartHeader.classList.add('hidden');
+    favoritesHeader.classList.add('hidden');
+    mainContainer.style.overflowX = 'visible';
+    // Скрываем нижнюю навигацию
+    const bottomNav = qs('nav');
+    if(bottomNav) bottomNav.classList.add('hidden');
+  } else if(tabId === 'category-4k-products' || tabId === 'category-2k-products' || tabId === 'category-fullhd-products' || tabId === 'configurator'){
+    // На страницах товаров категорий и конфигураторе: скрываем основной header
+    searchHeader.classList.add('hidden');
+    cartHeader.classList.add('hidden');
+    favoritesHeader.classList.add('hidden');
+    mainContainer.style.overflowX = 'visible';
+    // Показываем нижнюю навигацию
+    const bottomNav = qs('nav');
+    if(bottomNav) bottomNav.classList.remove('hidden');
+  } else {
+    // В остальных вкладках: показываем все
+    searchHeader.classList.remove('hidden');
+    searchInput.classList.remove('hidden');
+    cartHeader.classList.add('hidden');
+    favoritesHeader.classList.add('hidden');
+    mainContainer.style.overflowX = '';
+    // Показываем нижнюю навигацию
+    const bottomNav = qs('nav');
+    if(bottomNav) bottomNav.classList.remove('hidden');
+  }
+
+  // переключаем активную кнопку навигации (только для основных вкладок)
+  qsa('.tab-btn').forEach(btn => {
+    const pressed = btn.dataset.tab === tabId;
+    btn.classList.toggle('active', pressed);
+    btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+  });
+
+  // показать специализированные представления при открытии вкладок
+  if(tabId === 'cart') { renderCart(); }
+  if(tabId === 'favorites') { renderFavorites(); }
+  if(tabId === 'profile') { 
+    updateProfileFavCount();
+    updateTelegramProfile(); // Обновляем профиль при открытии вкладки
+  }
+  if(tabId === 'catalog') { 
+    // Очищаем список товаров при возврате в каталог
+    qs('#product-list').innerHTML = '';
+  }
+  
+  // Прокрутка в начало для страниц privacy и terms
+  if(tabId === 'privacy' || tabId === 'terms') {
+    // Прокручиваем main контейнер в начало
+    setTimeout(() => {
+      if(mainContainer) {
+        mainContainer.scrollTop = 0;
+      }
+      // Также прокручиваем window на случай, если прокрутка происходит на уровне страницы
+      window.scrollTo(0, 0);
+      
+      // Для privacy прокручиваем также внутренний контейнер с контентом
+      if(tabId === 'privacy') {
+        const privacyContent = target.querySelector('.overflow-y-auto');
+        if(privacyContent) {
+          privacyContent.scrollTop = 0;
+        }
+      }
+    }, 0);
+  }
+}
+
+// навешиваем события на навигационные кнопки
+qsa('[data-tab]').forEach(btn => btn.addEventListener('click', ()=> openTab(btn.dataset.tab)));
+
+// Обработчик кнопки "Назад к каталогу"
+qs('#back-to-catalog').addEventListener('click', () => {
+  openTab('catalog');
+});
+
+// Обработчик кнопки "Перейти в каталог" в корзине
+qs('#go-to-catalog').addEventListener('click', () => {
+  openTab('catalog');
+});
+
+// Обработчик кнопки "Перейти в каталог" в избранном
+qs('#go-to-catalog-from-fav').addEventListener('click', () => {
+  openTab('catalog');
+});
+
+// Обработчики для страницы товаров 4K Gaming
+qs('#breadcrumb-catalog-4k').addEventListener('click', () => {
+  openTabWithoutHistory('catalog');
+});
+qs('#breadcrumb-catalog-2k').addEventListener('click', () => {
+  openTabWithoutHistory('catalog');
+});
+qs('#breadcrumb-catalog-fullhd').addEventListener('click', () => {
+  openTabWithoutHistory('catalog');
+});
+
+// Дебаунсеры поиска по категориям
+const CATEGORY_SEARCH_DEBOUNCERS = {};
+['4k','2k','fullhd'].forEach(cat => {
+  CATEGORY_SEARCH_DEBOUNCERS[cat] = debounce(q => {
+    CATEGORY_STATE[cat].search = q;
+    applyAllFilters(cat);
+  }, 300);
+});
+
+// Функция сортировки товаров
+function sortProducts(products, sortType){
+  const sorted = [...products];
+  
+  switch(sortType){
+    case 'price-asc':
+      return sorted.sort((a, b) => a.price - b.price);
+    case 'price-desc':
+      return sorted.sort((a, b) => b.price - a.price);
+    case 'newest':
+      // Для новинок сортируем по ID в обратном порядке (предполагаем, что больший ID = новее)
+      return sorted.sort((a, b) => b.id - a.id);
+    case 'name-asc':
+      return sorted.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    case 'name-desc':
+      return sorted.sort((a, b) => b.name.localeCompare(a.name, 'ru'));
+    default:
+      return sorted;
+  }
+}
+
+// Применение поиска/сортировки/фильтров по категории
+function applyAllFilters(categoryId) {
+  const products = CATEGORY_PRODUCTS[categoryId] || [];
+  const state = CATEGORY_STATE[categoryId];
+  if(!state) return;
+
+  let filtered = products;
+
+  // Поиск
+  if(state.search.trim()){
+    const ql = state.search.trim().toLowerCase();
+    filtered = filtered.filter(p => 
+      p.name.toLowerCase().includes(ql) || 
+      (p.cpu && p.cpu.toLowerCase().includes(ql)) || 
+      (p.gpu && p.gpu.toLowerCase().includes(ql))
+    );
+  }
+
+  // Фильтр по цене
+  if(state.price.from !== null && state.price.from !== ''){
+    const from = parseInt(state.price.from);
+    if(!isNaN(from)){
+      filtered = filtered.filter(p => p.price >= from);
+    }
+  }
+  if(state.price.to !== null && state.price.to !== ''){
+    const to = parseInt(state.price.to);
+    if(!isNaN(to)){
+      filtered = filtered.filter(p => p.price <= to);
+    }
+  }
+
+  const sorted = state.sort ? sortProducts(filtered, state.sort) : filtered;
+  renderCategoryProductsFiltered(categoryId, sorted);
+}
+
+// Поиск по категориям
+qs('#search-4k').addEventListener('input', (e) => CATEGORY_SEARCH_DEBOUNCERS['4k'](e.target.value));
+qs('#search-2k').addEventListener('input', (e) => CATEGORY_SEARCH_DEBOUNCERS['2k'](e.target.value));
+qs('#search-fullhd').addEventListener('input', (e) => CATEGORY_SEARCH_DEBOUNCERS['fullhd'](e.target.value));
+
+// Кнопки сортировки и фильтров для категорий
+['4k','2k','fullhd'].forEach(cat => {
+  const sortBtn = qs(`#sort-btn-${cat}`);
+  const filterBtn = qs(`#filter-btn-${cat}`);
+
+  if(sortBtn){
+    sortBtn.addEventListener('click', () => {
+      currentModalCategory = cat;
+      const modal = qs('#sort-modal');
+      modal.classList.remove('hidden');
+      const state = CATEGORY_STATE[cat];
+      if(state.sort){
+        const radio = qs(`input[name="sort"][value="${state.sort}"]`);
+        if(radio) radio.checked = true;
+      } else {
+        qsa('input[name="sort"]').forEach(r => r.checked = false);
+      }
+    });
+  }
+
+  if(filterBtn){
+    filterBtn.addEventListener('click', () => {
+      currentModalCategory = cat;
+      const modal = qs('#filter-modal');
+      modal.classList.remove('hidden');
+      const state = CATEGORY_STATE[cat];
+      qs('#price-from').value = state.price.from || '';
+      qs('#price-to').value = state.price.to || '';
+    });
+  }
+});
+
+// Закрытие модального окна сортировки
+qs('#close-sort-modal').addEventListener('click', () => {
+  qs('#sort-modal').classList.add('hidden');
+  currentModalCategory = null;
+});
+
+// Закрытие при клике вне модального окна
+qs('#sort-modal').addEventListener('click', (e) => {
+  if(e.target.id === 'sort-modal'){
+    qs('#sort-modal').classList.add('hidden');
+    currentModalCategory = null;
+  }
+});
+
+// Применение сортировки
+qs('#apply-sort').addEventListener('click', () => {
+  if(!currentModalCategory) return;
+  const selectedSort = qs('input[name="sort"]:checked');
+  const state = CATEGORY_STATE[currentModalCategory];
+  if(selectedSort && state){
+    state.sort = selectedSort.value;
+    applyAllFilters(currentModalCategory);
+  }
+  qs('#sort-modal').classList.add('hidden');
+  currentModalCategory = null;
+});
+
+// Обработчик кнопки фильтров
+// (кнопки привязаны выше к каждой категории)
+
+// Закрытие модального окна фильтров
+qs('#close-filter-modal').addEventListener('click', () => {
+  qs('#filter-modal').classList.add('hidden');
+  currentModalCategory = null;
+});
+
+// Закрытие при клике вне модального окна фильтров
+qs('#filter-modal').addEventListener('click', (e) => {
+  if(e.target.id === 'filter-modal'){
+    qs('#filter-modal').classList.add('hidden');
+    currentModalCategory = null;
+  }
+});
+
+// Сброс фильтров
+qs('#reset-filter').addEventListener('click', () => {
+  if(!currentModalCategory) return;
+  const state = CATEGORY_STATE[currentModalCategory];
+  state.price = { from: null, to: null };
+  qs('#price-from').value = '';
+  qs('#price-to').value = '';
+  applyAllFilters(currentModalCategory);
+  qs('#filter-modal').classList.add('hidden');
+  currentModalCategory = null;
+});
+
+// Применение фильтров
+qs('#apply-filter').addEventListener('click', () => {
+  if(!currentModalCategory) return;
+  const priceFrom = qs('#price-from').value.trim();
+  const priceTo = qs('#price-to').value.trim();
+  
+  // Валидация: проверяем, что "от" не больше "до"
+  if(priceFrom && priceTo){
+    const from = parseInt(priceFrom);
+    const to = parseInt(priceTo);
+    if(!isNaN(from) && !isNaN(to) && from > to){
+      alert('Минимальная цена не может быть больше максимальной');
+      return;
+    }
+  }
+  
+  const state = CATEGORY_STATE[currentModalCategory];
+  state.price = {
+    from: priceFrom || null,
+    to: priceTo || null
+  };
+  
+  applyAllFilters(currentModalCategory);
+  qs('#filter-modal').classList.add('hidden');
+  currentModalCategory = null;
+});
+
+// -----------------------------
+// Обработка категорий (фильтрация)
+// -----------------------------
+function renderPCProductCard(categoryId){
+  const pcConfig = PC_CONFIGS[categoryId];
+  if(!pcConfig) return;
+
+  const container = qs('#category-product-card');
+  container.innerHTML = `
+    <div class="card-base rounded-2xl overflow-hidden shadow-2xl">
+      <!-- Изображение -->
+      <div class="w-full h-64 bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <img src="${pcConfig.image}" alt="${pcConfig.name}" class="w-full h-full object-contain" loading="lazy">
+      </div>
+      
+      <!-- Контент -->
+      <div class="p-6">
+        <h2 class="text-2xl font-bold text-amber-300 mb-2">${pcConfig.name}</h2>
+        <p class="text-amber-200 text-sm mb-6">${pcConfig.description}</p>
+        
+        <!-- Характеристики -->
+        <div class="bg-slate-800/50 rounded-xl p-4 mb-6 border border-amber-800/50">
+          <h3 class="text-lg font-semibold text-amber-400 mb-4">Характеристики:</h3>
+          <div class="space-y-3">
+            <div class="flex justify-between items-start">
+              <span class="text-blue-300 text-sm">Процессор:</span>
+              <span class="text-white text-sm text-right font-medium">${pcConfig.specs.cpu}</span>
+            </div>
+            <div class="flex justify-between items-start">
+              <span class="text-blue-300 text-sm">Видеокарта:</span>
+              <span class="text-white text-sm text-right font-medium">${pcConfig.specs.gpu}</span>
+            </div>
+            <div class="flex justify-between items-start">
+              <span class="text-blue-300 text-sm">Оперативная память:</span>
+              <span class="text-white text-sm text-right font-medium">${pcConfig.specs.ram}</span>
+            </div>
+            <div class="flex justify-between items-start">
+              <span class="text-blue-300 text-sm">Накопитель:</span>
+              <span class="text-white text-sm text-right font-medium">${pcConfig.specs.storage}</span>
+            </div>
+            <div class="flex justify-between items-start">
+              <span class="text-blue-300 text-sm">Материнская плата:</span>
+              <span class="text-white text-sm text-right font-medium">${pcConfig.specs.motherboard}</span>
+            </div>
+            <div class="flex justify-between items-start">
+              <span class="text-blue-300 text-sm">Блок питания:</span>
+              <span class="text-white text-sm text-right font-medium">${pcConfig.specs.psu}</span>
+            </div>
+            <div class="flex justify-between items-start">
+              <span class="text-blue-300 text-sm">Охлаждение:</span>
+              <span class="text-white text-sm text-right font-medium">${pcConfig.specs.cooling}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Цена и кнопки -->
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <div class="text-amber-400 text-sm">Цена:</div>
+            <div class="text-3xl font-bold text-amber-300">${formatPrice(pcConfig.price)}</div>
+          </div>
+        </div>
+        
+        <div class="flex gap-3">
+          <button id="add-pc-to-fav" class="flex-1 bg-slate-700 hover:bg-slate-600 text-amber-300 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2">
+            <i class="fas fa-heart"></i>
+            <span>В избранное</span>
+          </button>
+          <button id="add-pc-to-cart" class="flex-1 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+            В корзину
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Обработчики для кнопок карточки ПК
+  const pcId = `pc-${categoryId}`;
+  
+  // Устанавливаем начальное состояние кнопки избранного
+  const favBtn = qs('#add-pc-to-fav');
+  if(favs.has(pcId)){
+    favBtn.classList.add('bg-red-600');
+    favBtn.classList.remove('bg-slate-700');
+  }
+  
+  qs('#add-pc-to-cart').addEventListener('click', () => {
+    // Добавляем специальный идентификатор для ПК в корзину
+    cart.add(pcId, 1);
+    showCartBadge();
+    qs('#add-pc-to-cart').classList.add('pop');
+    setTimeout(() => qs('#add-pc-to-cart').classList.remove('pop'), 480);
+  });
+
+  favBtn.addEventListener('click', () => {
+    favs.toggle(pcId);
+    favBtn.setAttribute('aria-pressed', favs.has(pcId));
+    if(favs.has(pcId)){
+      favBtn.classList.add('bg-red-600');
+      favBtn.classList.remove('bg-slate-700');
+    } else {
+      favBtn.classList.remove('bg-red-600');
+      favBtn.classList.add('bg-slate-700');
+    }
+      updateProfileFavCount();
+      showFavBadge();
+  });
+}
+
+// Рендеринг страницы с товарами по категории
+function renderCategoryProductsFiltered(categoryId, products = CATEGORY_PRODUCTS[categoryId] || []){
+  const container = qs(`#products-${categoryId}-grid`);
+  if(!container) return;
+  const placeholder = CATEGORY_PLACEHOLDERS[categoryId] || '4K.png';
+  const cartClass = `add-cart-${categoryId}`;
+  const favClass = `add-fav-${categoryId}`;
+
+  container.innerHTML = '';
+
+  const frag = document.createDocumentFragment();
+
+  products.forEach(product => {
+    const card = document.createElement('div');
+    card.className = 'card-base rounded-xl overflow-hidden p-2 flex flex-col card-pressable h-[240px]';
+    card.innerHTML = `
+      <div class="w-full bg-slate-900 flex items-center justify-center mb-1.5 rounded-lg overflow-hidden h-[140px] flex-shrink-0">
+        <img src="${product.image}" alt="${product.name}" class="w-full h-full object-cover" loading="lazy" onerror="this.src='${placeholder}'">
+      </div>
+      <div class="mb-1.5 flex-shrink-0 min-h-[32px]">
+        <p class="text-[10px] text-blue-200 mb-0.5 leading-tight">${product.cpu || ''}</p>
+        <p class="text-[10px] text-blue-200 leading-tight">${product.gpu || ''}</p>
+      </div>
+      <div class="flex items-center justify-between mt-auto gap-2 flex-shrink-0">
+        <div class="flex gap-1.5 flex-1">
+          <button class="${cartClass} text-amber-400 hover:text-amber-300 transition p-1.5 rounded-lg bg-slate-800 bg-opacity-50 border border-amber-700 border-opacity-50 flex-1" data-id="${product.id}" title="В корзину">
+            <i class="fas fa-shopping-cart text-sm"></i>
+          </button>
+          <button class="${favClass} text-amber-300 hover:text-red-400 transition p-1.5 rounded-lg bg-slate-800 bg-opacity-50 border border-amber-700 border-opacity-50 flex-1" data-id="${product.id}" title="В избранное">
+            <i class="fas fa-heart text-sm"></i>
+          </button>
+        </div>
+        <div class="text-sm font-bold text-amber-400 whitespace-nowrap ml-2">${formatPrice(product.price)}</div>
+      </div>
+    `;
+
+    // Обработчики для кнопок
+    const cartBtn = card.querySelector(`.${cartClass}`);
+    const favBtn = card.querySelector(`.${favClass}`);
+    
+    cartBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cart.add(product.id, 1);
+      showCartBadge();
+      cartBtn.classList.add('pop');
+      setTimeout(() => cartBtn.classList.remove('pop'), 480);
+    });
+
+    favBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      favs.toggle(product.id);
+      const isFav = favs.has(product.id);
+      favBtn.setAttribute('aria-pressed', isFav);
+      if(isFav){
+        favBtn.classList.add('text-red-500');
+        favBtn.classList.remove('text-amber-300');
+      } else {
+        favBtn.classList.remove('text-red-500');
+        favBtn.classList.add('text-amber-300');
+      }
+      updateProfileFavCount();
+      showFavBadge();
+    });
+
+    // Устанавливаем начальное состояние избранного
+    if(favs.has(product.id)){
+      favBtn.classList.add('text-red-500');
+      favBtn.classList.remove('text-amber-300');
+    }
+
+    // Обработчик клика на карточку (открытие конфигуратора для всех товаров с конфигурацией)
+    if(PRODUCT_CONFIGS[product.id]){
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', (e) => {
+        // Не открываем конфигуратор, если клик был на кнопки
+        if(e.target.closest('button')) return;
+        openConfigurator(product.id);
+      });
+    }
+
+    frag.appendChild(card);
+  });
+
+  container.appendChild(frag);
+}
+
+// Рендеринг страницы с товарами категории
+function renderCategoryProducts(categoryId){
+  const state = CATEGORY_STATE[categoryId];
+  if(!state) return;
+  state.sort = null;
+  state.price = { from: null, to: null };
+  state.search = '';
+  const searchInput = qs(`#search-${categoryId}`);
+  if(searchInput) searchInput.value = '';
+  applyAllFilters(categoryId);
+}
+
+// Рендеринг конфигуратора ПК
+function renderConfigurator(productId){
+  const config = PRODUCT_CONFIGS[productId];
+  if(!config) return;
+
+  const container = qs('#configurator-content');
+  if(!container) return;
+
+  // Определяем категорию по productId
+  let categoryId = '4k';
+  let categoryName = '4K Gaming';
+  if(productId >= 201 && productId <= 204){
+    categoryId = '2k';
+    categoryName = '2K Gaming';
+  } else if(productId >= 301 && productId <= 304){
+    categoryId = 'fullhd';
+    categoryName = 'Full HD Gaming';
+  }
+
+  // Состояние конфигурации
+  let currentConfig = {
+    cpu: config.options.cpu.find(o => o.selected) || config.options.cpu[0],
+    gpu: config.options.gpu.find(o => o.selected) || config.options.gpu[0],
+    ssd: config.options.ssd.find(o => o.selected) || config.options.ssd[0],
+    warranty: config.options.warranty.find(o => o.selected) || config.options.warranty[0]
+  };
+
+  function calculatePrice(){
+    return config.basePrice + 
+           currentConfig.cpu.price + 
+           currentConfig.gpu.price + 
+           currentConfig.ssd.price + 
+           currentConfig.warranty.price;
+  }
+
+  function updatePrice(){
+    const totalPrice = calculatePrice();
+    const priceBtn = qs('#config-add-to-cart');
+    if(priceBtn){
+      priceBtn.textContent = `В корзину ${formatPrice(totalPrice)}`;
+    }
+  }
+
+  function renderOptionGroup(groupName, options, currentOption, onSelect){
+    const groupHtml = options.map((opt, idx) => {
+      const isSelected = opt.name === currentOption.name;
+      return `
+        <label class="flex items-center gap-3 p-3 rounded-lg bg-slate-700 bg-opacity-50 border ${isSelected ? 'border-amber-500' : 'border-amber-700 border-opacity-30'} cursor-pointer hover:bg-slate-700 transition">
+          <input type="radio" name="${groupName}" value="${idx}" ${isSelected ? 'checked' : ''} class="w-4 h-4 text-amber-600">
+          <span class="flex-1 text-white">${opt.name}</span>
+          ${opt.price !== 0 ? `<span class="text-amber-400 text-sm">${opt.price > 0 ? '+' : ''}${formatPrice(opt.price)}</span>` : ''}
+        </label>
+      `;
+    }).join('');
+    return groupHtml;
+  }
+
+  container.innerHTML = `
+    <!-- Breadcrumbs -->
+    <div class="mb-4 flex items-center gap-2 text-sm text-amber-300">
+      <span class="cursor-pointer hover:text-amber-200" id="config-breadcrumb-catalog">Каталог</span>
+      <i class="fas fa-chevron-right text-xs"></i>
+      <span class="cursor-pointer hover:text-amber-200" id="config-breadcrumb-category">${categoryName}</span>
+      <i class="fas fa-chevron-right text-xs"></i>
+      <span class="text-amber-400">${config.name}</span>
+    </div>
+
+    <!-- Изображение ПК -->
+    <div class="mb-6 w-full bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center p-4" style="height: 300px;">
+      <img src="${config.image}" alt="${config.name}" class="w-full h-full object-contain" loading="lazy" onerror="this.src='${CATEGORY_PLACEHOLDERS[categoryId] || '4K.png'}'">
+    </div>
+
+    <!-- Текущие характеристики -->
+    <div class="mb-6 card-base rounded-xl p-4">
+      <h3 class="text-lg font-bold text-amber-400 mb-3">Текущая конфигурация</h3>
+      <div class="space-y-2">
+        <div class="flex justify-between">
+          <span class="text-blue-300 text-sm">Процессор:</span>
+          <span class="text-white text-sm font-medium" id="config-current-cpu">${currentConfig.cpu.name}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-blue-300 text-sm">Видеокарта:</span>
+          <span class="text-white text-sm font-medium" id="config-current-gpu">${currentConfig.gpu.name}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Опции конфигурации -->
+    <div class="mb-6 space-y-4">
+      <!-- Процессор -->
+      <div class="card-base rounded-xl p-4">
+        <h4 class="text-base font-semibold text-amber-300 mb-3">Процессор</h4>
+        <div class="space-y-2" id="config-cpu-options">
+          ${renderOptionGroup('cpu', config.options.cpu, currentConfig.cpu, (opt) => { currentConfig.cpu = opt; updatePrice(); })}
+        </div>
+      </div>
+
+      <!-- Видеокарта -->
+      <div class="card-base rounded-xl p-4">
+        <h4 class="text-base font-semibold text-amber-300 mb-3">Видеокарта</h4>
+        <div class="space-y-2" id="config-gpu-options">
+          ${renderOptionGroup('gpu', config.options.gpu, currentConfig.gpu, (opt) => { currentConfig.gpu = opt; updatePrice(); })}
+        </div>
+      </div>
+
+      <!-- Объем SSD -->
+      <div class="card-base rounded-xl p-4">
+        <h4 class="text-base font-semibold text-amber-300 mb-3">Объем SSD</h4>
+        <div class="space-y-2" id="config-ssd-options">
+          ${renderOptionGroup('ssd', config.options.ssd, currentConfig.ssd, (opt) => { currentConfig.ssd = opt; updatePrice(); })}
+        </div>
+      </div>
+
+      <!-- Гарантийный срок -->
+      <div class="card-base rounded-xl p-4">
+        <h4 class="text-base font-semibold text-amber-300 mb-3">Гарантийный срок</h4>
+        <div class="space-y-2" id="config-warranty-options">
+          ${renderOptionGroup('warranty', config.options.warranty, currentConfig.warranty, (opt) => { currentConfig.warranty = opt; updatePrice(); })}
+        </div>
+      </div>
+    </div>
+
+    <!-- Описание -->
+    <div class="mb-6 card-base rounded-xl p-4">
+      <h3 class="text-lg font-bold text-amber-400 mb-3">Описание</h3>
+      <div class="text-white text-sm whitespace-pre-line leading-relaxed">${config.description}</div>
+    </div>
+
+    <!-- Кнопки действий -->
+    <div class="flex gap-2 mb-6">
+      <button id="config-add-to-cart" class="flex-[2] bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+        В корзину ${formatPrice(calculatePrice())}
+      </button>
+      <button id="config-go-to-cart" class="flex-1 bg-slate-700 hover:bg-slate-600 text-amber-300 py-3 rounded-xl font-semibold transition flex items-center justify-center">
+        <i class="fas fa-shopping-cart"></i>
+      </button>
+      <button id="config-add-to-fav" class="flex-1 bg-slate-700 hover:bg-slate-600 text-amber-300 py-3 rounded-xl font-semibold transition flex items-center justify-center">
+        <i class="fas fa-heart"></i>
+      </button>
+    </div>
+  `;
+
+  // Обработчики для радиокнопок
+  ['cpu', 'gpu', 'ssd', 'warranty'].forEach(groupName => {
+    const radios = container.querySelectorAll(`input[name="${groupName}"]`);
+    radios.forEach((radio, idx) => {
+      radio.addEventListener('change', () => {
+        if(radio.checked){
+          const option = config.options[groupName][idx];
+          currentConfig[groupName] = option;
+          
+          // Обновляем отображение текущей конфигурации
+          if(groupName === 'cpu'){
+            qs('#config-current-cpu').textContent = option.name;
+          } else if(groupName === 'gpu'){
+            qs('#config-current-gpu').textContent = option.name;
+          }
+          
+          // Обновляем визуальное выделение
+          const labels = container.querySelectorAll(`input[name="${groupName}"]`).forEach(r => {
+            const label = r.closest('label');
+            if(r.checked){
+              label.classList.remove('border-amber-700', 'border-opacity-30');
+              label.classList.add('border-amber-500');
+            } else {
+              label.classList.remove('border-amber-500');
+              label.classList.add('border-amber-700', 'border-opacity-30');
+            }
+          });
+          
+          updatePrice();
+        }
+      });
+    });
+  });
+
+  // Обработчик кнопки "В корзину"
+  qs('#config-add-to-cart').addEventListener('click', () => {
+    const totalPrice = calculatePrice();
+    // Создаем уникальный ID для конфигурированного товара
+    const configId = `config-${productId}-${Date.now()}`;
+    // Сохраняем конфигурацию в localStorage или добавляем в корзину с метаданными
+    cart.add(configId, 1);
+    // Можно сохранить конфигурацию отдельно для отображения в корзине
+    safeLocalStorageSet(`config_${configId}`, {
+      productId: productId,
+      baseName: config.name,
+      config: currentConfig,
+      price: totalPrice,
+      image: config.image
+    });
+    showCartBadge();
+    qs('#config-add-to-cart').classList.add('pop');
+    setTimeout(() => qs('#config-add-to-cart').classList.remove('pop'), 480);
+  });
+
+  // Обработчик кнопки перехода в корзину
+  qs('#config-go-to-cart').addEventListener('click', () => {
+    openTab('cart');
+  });
+
+  // Обработчик кнопки избранного
+  const favBtn = qs('#config-add-to-fav');
+  const configId = `config-${productId}`;
+  if(favs.has(configId)){
+    favBtn.classList.add('bg-red-600');
+    favBtn.classList.remove('bg-slate-700');
+  }
+  favBtn.addEventListener('click', () => {
+    const totalPrice = calculatePrice();
+    favs.toggle(configId);
+    safeLocalStorageSet(`fav_config_${configId}`, {
+      productId: productId,
+      baseName: config.name,
+      config: currentConfig,
+      price: totalPrice,
+      image: config.image
+    });
+    const isFav = favs.has(configId);
+    if(isFav){
+      favBtn.classList.add('bg-red-600');
+      favBtn.classList.remove('bg-slate-700');
+    } else {
+      favBtn.classList.remove('bg-red-600');
+      favBtn.classList.add('bg-slate-700');
+    }
+    updateProfileFavCount();
+    showFavBadge();
+  });
+
+  // Обработчики breadcrumbs
+  qs('#config-breadcrumb-catalog').addEventListener('click', () => {
+    openTabWithoutHistory('catalog');
+  });
+  qs('#config-breadcrumb-category').addEventListener('click', () => {
+    openCategory(categoryId);
+  });
+}
+
+// Открытие конфигуратора
+function openConfigurator(productId){
+  // Добавляем в историю только если это не возврат назад
+  if(!isNavigatingBack){
+    addToHistory(productId, 'configurator');
+  }
+  
+  renderConfigurator(productId);
+  // Не добавляем в историю через openTab, так как уже добавили выше
+  const wasNavigatingBack = isNavigatingBack;
+  isNavigatingBack = true; // Временно, чтобы openTab не добавил в историю
+  openTab('configurator');
+  isNavigatingBack = wasNavigatingBack;
+}
+
+function openCategory(categoryId){
+  // Добавляем в историю только если это не возврат назад
+  if(!isNavigatingBack){
+    addToHistory(categoryId, 'category');
+  }
+  
+  if(['4k','2k','fullhd'].includes(categoryId)){
+    renderCategoryProducts(categoryId);
+    // Не добавляем в историю через openTab, так как уже добавили выше
+    const wasNavigatingBack = isNavigatingBack;
+    isNavigatingBack = true; // Временно, чтобы openTab не добавил в историю
+    openTab(`category-${categoryId}-products`);
+    isNavigatingBack = wasNavigatingBack;
+    return;
+  }
+  // Для остальных категорий показываем список товаров
+  const list = PRODUCTS.filter(p => p.category === categoryId);
+  renderProducts(list, '#product-list');
+  const wasNavigatingBack = isNavigatingBack;
+  isNavigatingBack = true;
+  openTab('catalog');
+  isNavigatingBack = wasNavigatingBack;
+}
+
+// -----------------------------
+// Поиск с debounce
+// -----------------------------
+const doSearch = debounce(q => {
+  const ql = q.trim().toLowerCase();
+  if(!ql){ openTab('catalog'); return; }
+  const results = PRODUCTS.filter(p => (p.name + ' ' + (p.specs||'')).toLowerCase().includes(ql));
+  renderProducts(results, '#search-list');
+  openTab('search-results');
+}, 300);
+
+qs('#search').addEventListener('input', (e)=> doSearch(e.target.value));
+
+// -----------------------------
+// Оформление заказа — интеграция с Telegram WebApp SDK, если доступен
+// Обработчик теперь привязывается динамически в renderCheckoutBlock()
+// -----------------------------
+
+// -----------------------------
+// Инициализация: отрисовать начальное состояние и привязать события
+// -----------------------------
+// Функция для обновления профиля из Telegram
+function updateTelegramProfile(){
+  const profileName = qs('#profile-name');
+  const profileUsername = qs('#profile-username');
+  const avatarImg = qs('#profile-avatar-img');
+  const avatarPlaceholder = qs('#profile-avatar-placeholder');
+  
+  if(!profileName || !avatarPlaceholder) {
+    console.warn('Элементы профиля не найдены в DOM');
+    return;
+  }
+
+  const tg = safeTelegram();
+  if(!tg) {
+    console.log('Telegram WebApp не доступен - показываем дефолтные значения');
+    showAvatarInitials(avatarPlaceholder, 'Пользователь');
+    return;
+  }
+
+  try { 
+    tg.ready(); 
+    tg.expand(); 
+  }
+  catch(e){ 
+    console.warn('Ошибка инициализации Telegram WebApp:', e); 
+  }
+
+  // Пробуем получить данные пользователя
+  let ud = null;
+  
+  // Способ 1: initDataUnsafe.user (основной способ)
+  if(tg.initDataUnsafe && tg.initDataUnsafe.user){
+    ud = tg.initDataUnsafe.user;
+    console.log('Получены данные пользователя через initDataUnsafe:', ud);
+  }
+  
+  // Способ 2: проверяем, может быть данные в другом месте
+  if(!ud && tg.initData) {
+    console.log('Пробуем получить данные из initData');
+    // initData - это строка, которую нужно парсить, но обычно initDataUnsafe должно работать
+  }
+  
+  if(ud){
+    // Устанавливаем имя
+    const firstName = ud.first_name || '';
+    const lastName = ud.last_name || '';
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || 'Пользователь';
+    
+    profileName.textContent = fullName;
+    console.log('✓ Установлено имя:', fullName);
+    
+    // Устанавливаем username
+    const username = ud.username ? `@${ud.username}` : '';
+    if(profileUsername) {
+      if(username) {
+        profileUsername.textContent = username;
+        profileUsername.classList.remove('hidden');
+        console.log('✓ Установлен username:', username);
+      } else {
+        profileUsername.textContent = '';
+        profileUsername.classList.add('hidden');
+        console.log('Username не предоставлен');
+      }
+    }
+    
+    // Устанавливаем аватар
+    if(ud.photo_url && avatarImg){
+      console.log('Загружаем аватар из:', ud.photo_url);
+      // Сбрасываем предыдущее состояние
+      avatarImg.classList.add('hidden');
+      avatarPlaceholder.classList.remove('hidden');
+      
+      avatarImg.src = ud.photo_url;
+      avatarImg.onload = () => {
+        console.log('✓ Аватар загружен успешно');
+        avatarImg.classList.remove('hidden');
+        avatarPlaceholder.classList.add('hidden');
+      };
+      avatarImg.onerror = () => {
+        console.warn('✗ Ошибка загрузки аватара, показываем инициалы');
+        showAvatarInitials(avatarPlaceholder, fullName);
+      };
+    } else {
+      console.log('Аватар не предоставлен (photo_url отсутствует), показываем инициалы');
+      showAvatarInitials(avatarPlaceholder, fullName);
+    }
+  } else {
+    console.warn('✗ Данные пользователя не получены из Telegram WebApp');
+    console.log('Доступные свойства tg:', Object.keys(tg));
+    console.log('tg.initDataUnsafe:', tg.initDataUnsafe);
+    // Если данные не получены, показываем дефолтные значения
+    showAvatarInitials(avatarPlaceholder, 'Пользователь');
+  }
+}
+
+function init(){
+  renderCategories();
+  showCartBadge();
+  showFavBadge();
+  updateProfileFavCount();
+
+  // Инициализация истории навигации - добавляем начальную страницу (каталог)
+  navigationHistory.length = 0;
+  addToHistory('catalog', 'tab');
+  updateBackButton();
+
+  // Инициализация профиля Telegram
+  // Пробуем обновить сразу
+  updateTelegramProfile();
+  
+  // Также пробуем обновить после небольшой задержки (на случай, если Telegram WebApp еще не готов)
+  setTimeout(() => {
+    updateTelegramProfile();
+  }, 500);
+  
+  // Обработчики ссылок профиля
+  setupProfileLinks();
+  
+  // Обработчики вкладок отзывов
+  setupReviewsTabs();
+  
+  // Обработчики модальных окон
+  setupModals();
+}
+
+// Функция для отображения инициалов в аватаре
+function showAvatarInitials(container, name){
+  const words = name.trim().split(/\s+/);
+  let initials = '';
+  if(words.length >= 2){
+    initials = (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  } else if(words.length === 1){
+    initials = words[0][0].toUpperCase();
+  } else {
+    initials = 'П';
+  }
+  container.textContent = initials;
+}
+
+// Настройка обработчиков ссылок профиля
+function setupProfileLinks(){
+  // Избранное
+  const favLink = qs('#profile-link-favorites');
+  if(favLink){
+    favLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openTab('favorites');
+    });
+  }
+  
+  // Отзывы
+  const reviewsLink = qs('#profile-link-reviews');
+  if(reviewsLink){
+    reviewsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openTab('reviews');
+    });
+  }
+
+  // Мои заказы
+  const ordersLink = qs('#profile-link-orders');
+  if(ordersLink){
+    ordersLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openTab('orders');
+    });
+  }
+
+  // Депозиты
+  const depositsLink = qs('#profile-link-deposits');
+  if(depositsLink){
+    depositsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openTab('deposits');
+    });
+  }
+
+  // Бонусы
+  const bonusesLink = qs('#profile-link-bonuses');
+  if(bonusesLink){
+    bonusesLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openTab('bonuses');
+    });
+  }
+
+  // Пополнить счет (модальное окно)
+  const topupLink = qs('#profile-link-topup');
+  if(topupLink){
+    topupLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const modal = qs('#topup-modal');
+      if(modal) modal.classList.remove('hidden');
+    });
+  }
+
+  // Сертификат (модальное окно)
+  const certificateLink = qs('#profile-link-certificate');
+  if(certificateLink){
+    certificateLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const modal = qs('#certificate-modal');
+      if(modal) modal.classList.remove('hidden');
+    });
+  }
+
+  // Пользовательское соглашение (без добавления в историю)
+  const termsLink = qs('#profile-link-terms');
+  if(termsLink){
+    termsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openTabWithoutHistory('terms');
+    });
+  }
+
+  // Политика конфиденциальности (без добавления в историю)
+  const privacyLink = qs('#profile-link-privacy');
+  if(privacyLink){
+    privacyLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openTabWithoutHistory('privacy');
+    });
+  }
+
+  // Кнопки "Назад" на страницах terms и privacy
+  const termsBackBtn = qs('#terms-back-btn');
+  if(termsBackBtn){
+    termsBackBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      openTabWithoutHistory('profile');
+    });
+  }
+
+  const privacyBackBtn = qs('#privacy-back-btn');
+  if(privacyBackBtn){
+    privacyBackBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      openTabWithoutHistory('profile');
+    });
+  }
+}
+
+// Настройка обработчиков для вкладок отзывов
+function setupReviewsTabs(){
+  const publishedTab = qs('#reviews-tab-published');
+  const pendingTab = qs('#reviews-tab-pending');
+  const publishedContent = qs('#reviews-published-content');
+  const pendingContent = qs('#reviews-pending-content');
+
+  if(publishedTab && pendingTab && publishedContent && pendingContent){
+    publishedTab.addEventListener('click', () => {
+      publishedTab.classList.add('active');
+      publishedTab.classList.remove('text-amber-300/60');
+      publishedTab.classList.add('text-amber-400');
+      publishedTab.classList.remove('border-transparent');
+      publishedTab.classList.add('border-amber-400');
+      pendingTab.classList.remove('active');
+      pendingTab.classList.remove('text-amber-400');
+      pendingTab.classList.remove('border-amber-400');
+      pendingTab.classList.add('text-amber-300/60');
+      pendingTab.classList.add('border-transparent');
+      publishedContent.classList.remove('hidden');
+      pendingContent.classList.add('hidden');
+    });
+
+    pendingTab.addEventListener('click', () => {
+      pendingTab.classList.add('active');
+      pendingTab.classList.remove('text-amber-300/60');
+      pendingTab.classList.add('text-amber-400');
+      pendingTab.classList.remove('border-transparent');
+      pendingTab.classList.add('border-amber-400');
+      publishedTab.classList.remove('active');
+      publishedTab.classList.remove('text-amber-400');
+      publishedTab.classList.remove('border-amber-400');
+      publishedTab.classList.add('text-amber-300/60');
+      publishedTab.classList.add('border-transparent');
+      pendingContent.classList.remove('hidden');
+      publishedContent.classList.add('hidden');
+    });
+  }
+}
+
+// Настройка обработчиков для модальных окон
+function setupModals(){
+  // Модальное окно пополнения счета
+  const topupModal = qs('#topup-modal');
+  const closeTopupModal = qs('#close-topup-modal');
+  const topupClose = qs('#topup-close');
+  const topupContinue = qs('#topup-continue');
+
+  if(topupModal){
+    if(closeTopupModal){
+      closeTopupModal.addEventListener('click', () => {
+        topupModal.classList.add('hidden');
+      });
+    }
+    if(topupClose){
+      topupClose.addEventListener('click', () => {
+        topupModal.classList.add('hidden');
+      });
+    }
+    if(topupContinue){
+      topupContinue.addEventListener('click', () => {
+        // Здесь будет логика пополнения счета
+        const amount = qs('#topup-amount')?.value;
+        if(amount){
+          // Пока просто закрываем модальное окно
+          topupModal.classList.add('hidden');
+        }
+      });
+    }
+    // Закрытие по клику на фон
+    topupModal.addEventListener('click', (e) => {
+      if(e.target === topupModal){
+        topupModal.classList.add('hidden');
+      }
+    });
+  }
+
+  // Модальное окно активации сертификата
+  const certificateModal = qs('#certificate-modal');
+  const closeCertificateModal = qs('#close-certificate-modal');
+  const certificateClose = qs('#certificate-close');
+  const certificateActivate = qs('#certificate-activate');
+
+  if(certificateModal){
+    if(closeCertificateModal){
+      closeCertificateModal.addEventListener('click', () => {
+        certificateModal.classList.add('hidden');
+      });
+    }
+    if(certificateClose){
+      certificateClose.addEventListener('click', () => {
+        certificateModal.classList.add('hidden');
+      });
+    }
+    if(certificateActivate){
+      certificateActivate.addEventListener('click', () => {
+        // Здесь будет логика активации сертификата
+        const code = qs('#certificate-code')?.value;
+        if(code){
+          // Пока просто закрываем модальное окно
+          certificateModal.classList.add('hidden');
+        }
+      });
+    }
+    // Закрытие по клику на фон
+    certificateModal.addEventListener('click', (e) => {
+      if(e.target === certificateModal){
+        certificateModal.classList.add('hidden');
+      }
+    });
+  }
+
+  // Модальное окно оформления заказа
+  const checkoutModal = qs('#checkout-modal');
+  const closeCheckoutModal = qs('#close-checkout-modal');
+  const deliveryTab = qs('#delivery-tab');
+  const pickupTab = qs('#pickup-tab');
+  const checkoutContinueBtn = qs('#checkout-continue-btn');
+
+  if(checkoutModal){
+    if(closeCheckoutModal){
+      closeCheckoutModal.addEventListener('click', () => {
+        checkoutModal.classList.add('hidden');
+        resetCheckoutForms();
+        window.__currentOrderData = null;
+      });
+    }
+    
+    // Переключение вкладок
+    if(deliveryTab){
+      deliveryTab.addEventListener('click', () => {
+        switchCheckoutTab('delivery');
+      });
+    }
+    if(pickupTab){
+      pickupTab.addEventListener('click', () => {
+        switchCheckoutTab('pickup');
+      });
+    }
+    
+    // Обработчик кнопки "Продолжить"
+    if(checkoutContinueBtn){
+      checkoutContinueBtn.addEventListener('click', () => {
+        const isDelivery = !qs('#delivery-form').classList.contains('hidden');
+        if(validateCheckoutForm(isDelivery)){
+          // Сохраняем данные заказа
+          const orderData = getCheckoutData(isDelivery);
+          window.__currentOrderData = orderData;
+          
+          // Закрываем модальное окно оформления и открываем окно оплаты
+          checkoutModal.classList.add('hidden');
+          const paymentModal = qs('#payment-modal');
+          const paymentTotal = qs('#payment-total');
+          if(paymentModal && paymentTotal){
+            paymentTotal.textContent = formatPrice(cart.getTotal());
+            paymentModal.classList.remove('hidden');
+          }
+        } else {
+          alert('Пожалуйста, заполните все обязательные поля');
+        }
+      });
+    }
+    
+    // Закрытие по клику на фон
+    checkoutModal.addEventListener('click', (e) => {
+      if(e.target === checkoutModal){
+        checkoutModal.classList.add('hidden');
+        resetCheckoutForms();
+        window.__currentOrderData = null;
+      }
+    });
+  }
+
+  // Модальное окно оплаты
+  const paymentModal = qs('#payment-modal');
+  const closePaymentModal = qs('#close-payment-modal');
+  const paymentProcessBtn = qs('#payment-process-btn');
+
+  if(paymentModal){
+    if(closePaymentModal){
+      closePaymentModal.addEventListener('click', () => {
+        paymentModal.classList.add('hidden');
+      });
+    }
+    
+    if(paymentProcessBtn){
+      paymentProcessBtn.addEventListener('click', () => {
+        // Симуляция процесса оплаты
+        paymentProcessBtn.disabled = true;
+        paymentProcessBtn.textContent = 'Обработка...';
+        
+        // Имитация задержки оплаты
+        setTimeout(() => {
+          paymentModal.classList.add('hidden');
+          
+          // Показываем модальное окно успешного оформления
+          const orderSuccessModal = qs('#order-success-modal');
+          if(orderSuccessModal){
+            orderSuccessModal.classList.remove('hidden');
+          }
+          
+          // Очищаем корзину и обновляем интерфейс
+          cart.clear();
+          renderCart();
+          showCartBadge();
+          
+          // Сбрасываем состояние кнопки оплаты
+          paymentProcessBtn.disabled = false;
+          paymentProcessBtn.textContent = 'Оплатить';
+        }, 1500);
+      });
+    }
+    
+    // Закрытие по клику на фон
+    paymentModal.addEventListener('click', (e) => {
+      if(e.target === paymentModal){
+        paymentModal.classList.add('hidden');
+      }
+    });
+  }
+
+  // Модальное окно успешного оформления заказа
+  const orderSuccessModal = qs('#order-success-modal');
+  const closeOrderSuccessModal = qs('#close-order-success-modal');
+
+  if(orderSuccessModal){
+    if(closeOrderSuccessModal){
+      closeOrderSuccessModal.addEventListener('click', () => {
+        orderSuccessModal.classList.add('hidden');
+        // Переходим в каталог после закрытия
+        openTab('catalog');
+      });
+    }
+    
+    // Закрытие по клику на фон
+    orderSuccessModal.addEventListener('click', (e) => {
+      if(e.target === orderSuccessModal){
+        orderSuccessModal.classList.add('hidden');
+        openTab('catalog');
+      }
+    });
+  }
+}
+
+init();
+
+// Для отладки в консоли
+window.__AURUM = { cart, favs, PRODUCTS, CATEGORIES };
+
+</script>
+</body>
+</html>
