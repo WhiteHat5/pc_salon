@@ -11,8 +11,24 @@
   <title>AURUM</title>
 
   <!-- Tailwind (CDN для демо). В продакшене собирается через PostCSS и выполняется очистка неиспользуемых классов. -->
-  <script src="https://cdn.tailwindcss.com" crossorigin="anonymous" onerror="console.error('Не удалось загрузить Tailwind CSS')"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" onerror="console.error('Не удалось загрузить Font Awesome')" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <!-- Fallback: если Tailwind не загрузится, добавляем базовые стили -->
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        const testEl = document.createElement('div');
+        testEl.className = 'hidden';
+        testEl.style.cssText = 'position: absolute;';
+        document.body.appendChild(testEl);
+        const computed = window.getComputedStyle(testEl);
+        if(computed.position !== 'absolute') {
+          console.warn('Tailwind CSS не загрузился, возможно проблема с CDN');
+        }
+        document.body.removeChild(testEl);
+      }, 1000);
+    });
+  </script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%231e293b'/><text x='50%' y='50%' font-size='60' text-anchor='middle' dy='.3em' fill='%23fbbf24' font-family='Georgia, serif' font-weight='bold'>A</text></svg>">
 
   <style>
