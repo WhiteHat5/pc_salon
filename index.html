@@ -1041,6 +1041,8 @@
 
 <!-- SDK Telegram WebApp -->
 <script src="https://telegram.org/js/telegram-web-app.js" onerror="console.warn('Не удалось загрузить Telegram WebApp SDK')"></script>
+<!-- API модуль -->
+<script src="js/api.js"></script>
 <script>
   // маленькая обёртка для безопасного доступа к Telegram.WebApp, если он присутствует
   function safeTelegram() {
@@ -1142,13 +1144,62 @@
 <!-- Логика приложения (модульная, современная) -->
 <script type="module">
 // -----------------------------
-// Мок-данные (в продакшене заменяются на вызовы API)
+// Мок-данные (fallback если API недоступен)
 // -----------------------------
-const CATEGORIES = [
+const CATEGORIES_FALLBACK = [
   { id: '4k', name: '4K Gaming', image: '4K.png' },
   { id: '2k', name: '2K Gaming', image: '2K.png' },
   { id: 'fullhd', name: 'Full HD Gaming', image: 'FullHD.png' }
 ];
+
+// Глобальные переменные для данных (загружаются из API)
+let CATEGORIES = [...CATEGORIES_FALLBACK];
+let CATEGORY_PRODUCTS = {
+  '4k': [],
+  '2k': [],
+  'fullhd': []
+};
+
+// Загрузка категорий из API
+async function loadCategories() {
+  try {
+    if (window.API && window.API.categories) {
+      const categories = await window.API.categories.getAll();
+      if (categories && categories.length > 0) {
+        CATEGORIES = categories;
+        return true;
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load categories from API, using fallback:', error);
+  }
+  CATEGORIES = [...CATEGORIES_FALLBACK];
+  return false;
+}
+
+// Загрузка товаров категории из API
+async function loadCategoryProducts(categoryId) {
+  try {
+    if (window.API && window.API.products) {
+      const products = await window.API.products.getByCategory(categoryId);
+      if (products && products.length > 0) {
+        CATEGORY_PRODUCTS[categoryId] = products;
+        return true;
+      }
+    }
+  } catch (error) {
+    console.warn(`Failed to load products for category ${categoryId} from API:`, error);
+  }
+  // Fallback на мок-данные
+  if (categoryId === '4k' && PRODUCTS_4K.length > 0) {
+    CATEGORY_PRODUCTS['4k'] = PRODUCTS_4K;
+  } else if (categoryId === '2k' && PRODUCTS_2K.length > 0) {
+    CATEGORY_PRODUCTS['2k'] = PRODUCTS_2K;
+  } else if (categoryId === 'fullhd' && PRODUCTS_FULLHD.length > 0) {
+    CATEGORY_PRODUCTS['fullhd'] = PRODUCTS_FULLHD;
+  }
+  return false;
+}
 
 // Товары для категории 4K Gaming
 const PRODUCTS_4K = [
@@ -2951,7 +3002,12 @@ function sortProducts(products, sortType){
 }
 
 // Применение поиска/сортировки/фильтров по категории
-function applyAllFilters(categoryId) {
+async function applyAllFilters(categoryId) {
+  // Загружаем товары из API если еще не загружены
+  if (!CATEGORY_PRODUCTS[categoryId] || CATEGORY_PRODUCTS[categoryId].length === 0) {
+    await loadCategoryProducts(categoryId);
+  }
+  
   const products = CATEGORY_PRODUCTS[categoryId] || [];
   const state = CATEGORY_STATE[categoryId];
   if(!state) return;
@@ -3334,9 +3390,15 @@ function renderCategoryProductsFiltered(categoryId, products = CATEGORY_PRODUCTS
 }
 
 // Рендеринг страницы с товарами категории
-function renderCategoryProducts(categoryId){
+async function renderCategoryProducts(categoryId){
   const state = CATEGORY_STATE[categoryId];
   if(!state) return;
+  
+  // Загружаем товары из API если еще не загружены
+  if (!CATEGORY_PRODUCTS[categoryId] || CATEGORY_PRODUCTS[categoryId].length === 0) {
+    await loadCategoryProducts(categoryId);
+  }
+  
   state.sort = null;
   state.price = { from: null, to: null };
   state.search = '';
@@ -3612,11 +3674,25 @@ function openCategory(categoryId){
 // -----------------------------
 // Поиск с debounce
 // -----------------------------
-const doSearch = debounce(q => {
+const doSearch = debounce(async q => {
   const ql = q.trim().toLowerCase();
   if(!ql){ openTab('catalog'); return; }
-  // Объединяем все товары из всех категорий для поиска
-  const allProducts = [...PRODUCTS_4K, ...PRODUCTS_2K, ...PRODUCTS_FULLHD];
+  
+  // Пробуем загрузить товары из API, если еще не загружены
+  let allProducts = [];
+  try {
+    if (window.API && window.API.products) {
+      allProducts = await window.API.products.getAll();
+    }
+  } catch (error) {
+    console.warn('Failed to load products from API for search, using fallback:', error);
+  }
+  
+  // Fallback на мок-данные если API недоступен или пуст
+  if (!allProducts || allProducts.length === 0) {
+    allProducts = [...PRODUCTS_4K, ...PRODUCTS_2K, ...PRODUCTS_FULLHD];
+  }
+  
   const results = allProducts.filter(p => {
     const searchText = (p.name || '') + ' ' + (p.cpu || '') + ' ' + (p.gpu || '') + ' ' + (p.specs || '');
     return searchText.toLowerCase().includes(ql);
@@ -3721,6 +3797,18 @@ function updateTelegramProfile(){
       console.log('Аватар не предоставлен (photo_url отсутствует), показываем инициалы');
       showAvatarInitials(avatarPlaceholder, fullName);
     }
+    
+    // Синхронизируем пользователя с базой данных
+    if (window.API && window.API.users) {
+      window.API.users.createOrUpdate({
+        telegram_id: ud.id,
+        first_name: firstName,
+        last_name: lastName,
+        username: ud.username || null
+      }).catch(error => {
+        console.warn('Failed to sync user with database:', error);
+      });
+    }
   } else {
     console.warn('✗ Данные пользователя не получены из Telegram WebApp');
     console.log('Доступные свойства tg:', Object.keys(tg));
@@ -3730,8 +3818,11 @@ function updateTelegramProfile(){
   }
 }
 
-function init(){
+async function init(){
+  // Загружаем категории из API
+  await loadCategories();
   renderCategories();
+  
   showCartBadge();
   showFavBadge();
   updateProfileFavCount();
@@ -4069,13 +4160,103 @@ function setupModals(){
     }
     
     if(paymentProcessBtn){
-      paymentProcessBtn.addEventListener('click', () => {
+      paymentProcessBtn.addEventListener('click', async () => {
         // Симуляция процесса оплаты
         paymentProcessBtn.disabled = true;
         paymentProcessBtn.textContent = 'Обработка...';
         
-        // Имитация задержки оплаты
-        setTimeout(() => {
+        try {
+          // Получаем данные заказа
+          const orderData = window.__currentOrderData;
+          if (!orderData) {
+            throw new Error('Данные заказа не найдены');
+          }
+          
+          // Получаем товары из корзины
+          const cartItems = cart.getItemsFull();
+          if (!cartItems || cartItems.length === 0) {
+            throw new Error('Корзина пуста');
+          }
+          
+          // Получаем или создаем пользователя
+          let userId = null;
+          const tg = safeTelegram();
+          if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && window.API && window.API.users) {
+            try {
+              const telegramUser = tg.initDataUnsafe.user;
+              const user = await window.API.users.createOrUpdate({
+                telegram_id: telegramUser.id,
+                first_name: telegramUser.first_name,
+                last_name: telegramUser.last_name,
+                username: telegramUser.username,
+                phone: orderData.phone,
+                address: orderData.address || null
+              });
+              userId = user.id;
+            } catch (error) {
+              console.warn('Failed to sync user with database:', error);
+            }
+          }
+          
+          // Подготавливаем данные заказа для API
+          const paymentMethod = qs('input[name="payment-method"]:checked')?.value || 'cash';
+          const orderItems = cartItems.map(item => {
+            const idStr = String(item.id);
+            let itemType = 'product';
+            let productId = null;
+            let configId = null;
+            let configData = null;
+            
+            if (idStr.startsWith('config-')) {
+              itemType = 'config';
+              const configDataStorage = safeLocalStorageGet(`config_${idStr}`, null);
+              if (configDataStorage) {
+                configId = configDataStorage.productId;
+                configData = configDataStorage.config;
+              }
+            } else if (idStr.startsWith('pc-')) {
+              itemType = 'pc';
+            } else {
+              productId = parseInt(idStr);
+            }
+            
+            return {
+              product_id: productId,
+              config_id: configId,
+              item_type: itemType,
+              item_name: item.name || ((item.cpu || '') + (item.cpu && item.gpu ? ' | ' : '') + (item.gpu || '')),
+              item_specs: item.specs || ((item.cpu || '') + (item.cpu && item.gpu ? ' | ' : '') + (item.gpu || '')),
+              quantity: item.qty || 1,
+              unit_price: item.price || 0,
+              total_price: (item.price || 0) * (item.qty || 1),
+              config_data: configData
+            };
+          });
+          
+          // Сохраняем заказ в БД
+          if (window.API && window.API.orders && userId) {
+            try {
+              const orderResult = await window.API.orders.create({
+                user_id: userId,
+                delivery_type: orderData.type,
+                full_name: orderData.name,
+                phone: orderData.phone,
+                address: orderData.address || null,
+                comment: orderData.comment || null,
+                total_amount: cart.getTotal(),
+                payment_method: paymentMethod,
+                items: orderItems
+              });
+              console.log('Order saved to database:', orderResult);
+            } catch (error) {
+              console.error('Failed to save order to database:', error);
+              // Продолжаем выполнение даже если не удалось сохранить в БД
+            }
+          }
+          
+          // Имитация задержки оплаты
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
           paymentModal.classList.add('hidden');
           
           // Показываем модальное окно успешного оформления
@@ -4088,11 +4269,16 @@ function setupModals(){
           cart.clear();
           renderCart();
           showCartBadge();
+          window.__currentOrderData = null;
           
+        } catch (error) {
+          console.error('Error processing payment:', error);
+          alert('Произошла ошибка при оформлении заказа. Попробуйте еще раз.');
+        } finally {
           // Сбрасываем состояние кнопки оплаты
           paymentProcessBtn.disabled = false;
           paymentProcessBtn.textContent = 'Оплатить';
-        }, 1500);
+        }
       });
     }
     
