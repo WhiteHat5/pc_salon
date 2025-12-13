@@ -3569,9 +3569,10 @@ function renderConfigurator(productId){
 
 // Открытие конфигуратора
 function openConfigurator(productId){
-  // НЕ добавляем конфигуратор в историю навигации
-  // Удаляем все записи из истории, чтобы кнопка "назад" исчезла
-  navigationHistory.length = 0;
+  // Добавляем в историю только если это не возврат назад
+  if(!isNavigatingBack){
+    addToHistory(productId, 'configurator');
+  }
   
   renderConfigurator(productId);
   // Не добавляем в историю через openTab
@@ -3579,7 +3580,7 @@ function openConfigurator(productId){
   isNavigatingBack = true; // Временно, чтобы openTab не добавил в историю
   openTab('configurator');
   isNavigatingBack = wasNavigatingBack;
-  updateBackButton(); // Обновляем кнопку назад (должна исчезнуть)
+  updateBackButton(); // Обновляем кнопку назад
 }
 
 function openCategory(categoryId){
