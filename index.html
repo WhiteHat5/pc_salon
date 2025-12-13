@@ -2561,9 +2561,11 @@ function renderFavorites(){
           }
         }
         
+        // Для конфигурированных товаров используем specs как название
+        const displayName = specs || name;
         return {
           id: id,
-          name: name,
+          name: displayName,
           price: configData.price,
           image: configData.image,
           specs: specs
@@ -2575,9 +2577,11 @@ function renderFavorites(){
       const categoryId = idStr.replace('pc-', '');
       const pcConfig = PC_CONFIGS[categoryId];
       if(pcConfig){
+        // Для ПК используем только характеристики как название
+        const displayName = `${pcConfig.specs.cpu} | ${pcConfig.specs.gpu}`;
         return {
           id: id,
-          name: pcConfig.name,
+          name: displayName,
           price: pcConfig.price,
           image: pcConfig.image,
           specs: `${pcConfig.specs.cpu}, ${pcConfig.specs.gpu}`
@@ -2585,13 +2589,18 @@ function renderFavorites(){
       }
     }
     const p = findProductById(idStr);
-    return p ? {
-      id: p.id,
-      name: p.name,
-      price: p.price,
-      image: p.image,
-      specs: `${p.cpu || ''}${p.cpu && p.gpu ? ', ' : ''}${p.gpu || p.specs || ''}`.trim()
-    } : null;
+    if(p){
+      // Используем только процессор и видеокарту как название
+      const displayName = (p.cpu || '') + (p.cpu && p.gpu ? ' | ' : '') + (p.gpu || '') || p.name;
+      return {
+        id: p.id,
+        name: displayName,
+        price: p.price,
+        image: p.image,
+        specs: `${p.cpu || ''}${p.cpu && p.gpu ? ', ' : ''}${p.gpu || p.specs || ''}`.trim()
+      };
+    }
+    return null;
   }).filter(Boolean);
   
   const el = qs('#favorites-list');
@@ -3259,7 +3268,7 @@ function renderCategoryProductsFiltered(categoryId, products = CATEGORY_PRODUCTS
         <img src="${product.image}" alt="${(product.cpu || '') + (product.cpu && product.gpu ? ' | ' : '') + (product.gpu || '') || product.name}" class="w-full h-full object-cover" loading="lazy" onerror="this.src='${placeholder}'">
       </div>
       <div class="mb-1.5 flex-shrink-0 min-h-[32px]">
-        <p class="text-[10px] text-blue-200 leading-tight">${(product.cpu || '') + (product.cpu && product.gpu ? ' | ' : '') + (product.gpu || '')}</p>
+        <p class="text-xs text-blue-200 leading-tight">${(product.cpu || '') + (product.cpu && product.gpu ? ' | ' : '') + (product.gpu || '')}</p>
       </div>
       <div class="flex items-center justify-between mt-auto gap-2 flex-shrink-0">
         <div class="flex gap-1.5 flex-1">
@@ -3394,15 +3403,6 @@ function renderConfigurator(productId){
   }
 
   container.innerHTML = `
-    <!-- Breadcrumbs -->
-    <div class="mb-4 flex items-center gap-2 text-sm text-amber-300">
-      <span class="cursor-pointer hover:text-amber-200" id="config-breadcrumb-catalog">Каталог</span>
-      <i class="fas fa-chevron-right text-xs"></i>
-      <span class="cursor-pointer hover:text-amber-200" id="config-breadcrumb-category">${categoryName}</span>
-      <i class="fas fa-chevron-right text-xs"></i>
-      <span class="text-amber-400">${config.name}</span>
-    </div>
-
     <!-- Изображение ПК -->
     <div class="mb-6 w-full bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center p-4" style="height: 300px;">
       <img src="${config.image}" alt="${config.name}" class="w-full h-full object-contain" loading="lazy" onerror="this.src='${CATEGORY_PLACEHOLDERS[categoryId] || '4K.png'}'">
@@ -3565,14 +3565,6 @@ function renderConfigurator(productId){
     updateProfileFavCount();
     showFavBadge();
   });
-
-  // Обработчики breadcrumbs
-  qs('#config-breadcrumb-catalog').addEventListener('click', () => {
-    openTabWithoutHistory('catalog');
-  });
-  qs('#config-breadcrumb-category').addEventListener('click', () => {
-    openCategory(categoryId);
-  });
 }
 
 // Открытие конфигуратора
@@ -3591,12 +3583,6 @@ function openConfigurator(productId){
 }
 
 function openCategory(categoryId){
-  // Если переходим из каталога (история пуста или последняя страница - каталог), очищаем историю
-  if(!isNavigatingBack && (navigationHistory.length === 0 || 
-     (navigationHistory.length === 1 && navigationHistory[0].id === 'catalog' && navigationHistory[0].type === 'tab'))){
-    navigationHistory.length = 0;
-  }
-  
   // Добавляем в историю только если это не возврат назад
   if(!isNavigatingBack){
     addToHistory(categoryId, 'category');
