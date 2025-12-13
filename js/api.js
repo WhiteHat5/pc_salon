@@ -2,7 +2,26 @@
  * API модуль для работы с backend
  */
 
-const API_BASE_URL = window.location.origin + '/pc_salon/api';
+// Определяем базовый URL для API
+let API_BASE_URL;
+
+// Можно указать публичный URL API через window.API_URL или переменную окружения
+if (window.API_URL) {
+  // Явно указанный URL (например, https://your-api-domain.com/api)
+  API_BASE_URL = window.API_URL.endsWith('/api') ? window.API_URL : window.API_URL + '/api';
+} else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  // Локальная разработка
+  API_BASE_URL = window.location.origin + '/pc_salon/api';
+} else {
+  // GitHub Pages или другой хостинг - нужен публичный URL API
+  // По умолчанию пробуем относительный путь (не сработает на GitHub Pages без PHP)
+  const path = window.location.pathname;
+  const basePath = path.substring(0, path.lastIndexOf('/'));
+  API_BASE_URL = basePath + '/api';
+  
+  // Для GitHub Pages нужно указать window.API_URL в index.html
+  console.warn('API_BASE_URL использует относительный путь. Для GitHub Pages укажите window.API_URL с публичным URL API.');
+}
 
 // Утилита для выполнения запросов
 async function apiRequest(endpoint, options = {}) {
@@ -20,7 +39,19 @@ async function apiRequest(endpoint, options = {}) {
     }
     
     try {
+        // Проверяем, что мы не на file:// протоколе
+        if (window.location.protocol === 'file:') {
+            throw new Error('API недоступен на file:// протоколе');
+        }
+        
         const response = await fetch(url, config);
+        
+        // Проверяем, что ответ валидный JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Invalid response format');
+        }
+        
         const data = await response.json();
         
         if (!response.ok) {
@@ -29,7 +60,8 @@ async function apiRequest(endpoint, options = {}) {
         
         return data;
     } catch (error) {
-        console.error('API request failed:', error);
+        // Не логируем ошибки в консоль, чтобы не засорять её
+        // Просто пробрасываем ошибку дальше для обработки в вызывающем коде
         throw error;
     }
 }

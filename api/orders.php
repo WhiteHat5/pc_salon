@@ -13,12 +13,47 @@ switch ($method) {
         // Создать заказ
         $data = getPostData();
         
-        if (!isset($data['user_id']) || !isset($data['items']) || !isset($data['delivery_type'])) {
-            sendError('Missing required fields: user_id, items, delivery_type', 400);
+        if (!isset($data['items']) || !isset($data['delivery_type'])) {
+            sendError('Missing required fields: items, delivery_type', 400);
+        }
+        
+        if (!isset($data['phone']) && !isset($data['user_id'])) {
+            sendError('phone or user_id is required', 400);
         }
         
         try {
             $pdo->beginTransaction();
+            
+            // Если user_id не передан, создаем или находим пользователя по телефону
+            $userId = $data['user_id'] ?? null;
+            if (!$userId && isset($data['phone'])) {
+                // Ищем пользователя по телефону
+                $userStmt = $pdo->prepare("SELECT id FROM users WHERE phone = ?");
+                $userStmt->execute([$data['phone']]);
+                $existingUser = $userStmt->fetch();
+                
+                if ($existingUser) {
+                    $userId = $existingUser['id'];
+                } else {
+                    // Создаем нового пользователя
+                    $nameParts = isset($data['full_name']) ? explode(' ', $data['full_name'], 2) : [null, null];
+                    $insertUserStmt = $pdo->prepare("
+                        INSERT INTO users (first_name, last_name, phone, address, last_activity)
+                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ");
+                    $insertUserStmt->execute([
+                        $nameParts[0] ?? null,
+                        isset($nameParts[1]) ? $nameParts[1] : null,
+                        $data['phone'],
+                        $data['address'] ?? null
+                    ]);
+                    $userId = $pdo->lastInsertId();
+                    
+                    // Создаем запись статистики
+                    $statsStmt = $pdo->prepare("INSERT INTO user_statistics (user_id, registration_date) VALUES (?, CURRENT_TIMESTAMP)");
+                    $statsStmt->execute([$userId]);
+                }
+            }
             
             // Генерируем номер заказа
             $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
@@ -32,7 +67,7 @@ switch ($method) {
             ");
             
             $stmt->execute([
-                $data['user_id'],
+                $userId,
                 $orderNumber,
                 $data['delivery_type'],
                 $data['full_name'] ?? '',

@@ -979,16 +979,20 @@
     </div>
 
     <!-- Модальное окно успешного оформления заказа -->
-    <div id="order-success-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+    <div id="order-success-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center" style="padding-bottom: 5rem;">
       <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-amber-700">
         <div class="text-center">
           <div class="mb-4">
             <i class="fas fa-check-circle text-6xl text-green-400"></i>
           </div>
           <h3 class="text-2xl font-bold text-amber-400 mb-4">Заказ оформлен!</h3>
-          <p class="text-slate-300 mb-6">
+          <p class="text-slate-300 mb-4">
             Ваш заказ успешно принят в обработку. Наш менеджер свяжется с вами в ближайшее время для подтверждения заказа.
           </p>
+          <div id="order-number-display" class="bg-amber-600 bg-opacity-20 rounded-lg p-3 mb-6 border border-amber-500 hidden">
+            <p class="text-amber-300 text-sm font-medium mb-1">Номер заказа:</p>
+            <p id="order-number" class="text-white font-bold text-lg"></p>
+          </div>
           <div class="bg-slate-700 bg-opacity-50 rounded-lg p-4 border border-amber-700 mb-6">
             <p class="text-amber-300 font-medium mb-2">Контакты менеджера:</p>
             <p class="text-white mb-1"><i class="fas fa-phone text-amber-400 mr-2"></i>+7 (999) 123-45-67</p>
@@ -1041,7 +1045,13 @@
 
 <!-- SDK Telegram WebApp -->
 <script src="https://telegram.org/js/telegram-web-app.js" onerror="console.warn('Не удалось загрузить Telegram WebApp SDK')"></script>
-<!-- API модуль -->
+<!-- Настройка URL API (укажите публичный URL вашего API сервера) -->
+<!-- Для локальной разработки (localhost) настройка не требуется -->
+<!-- Для GitHub Pages раскомментируйте и укажите ваш публичный URL API: -->
+<!-- <script>
+  window.API_URL = 'https://your-api-domain.com'; // Замените на ваш публичный URL API
+</script> -->
+<!-- API модуль (загружается перед основным скриптом) -->
 <script src="js/api.js"></script>
 <script>
   // маленькая обёртка для безопасного доступа к Telegram.WebApp, если он присутствует
@@ -1950,12 +1960,12 @@ const PRODUCT_CONFIGS = {
   }
 };
 
-// Сводные данные по категориям для повторного использования
-const CATEGORY_PRODUCTS = {
-  '4k': PRODUCTS_4K,
-  '2k': PRODUCTS_2K,
-  'fullhd': PRODUCTS_FULLHD
-};
+// CATEGORY_PRODUCTS объявлен выше, здесь инициализируем fallback данными если пусто
+if (Object.keys(CATEGORY_PRODUCTS).every(key => CATEGORY_PRODUCTS[key].length === 0)) {
+  CATEGORY_PRODUCTS['4k'] = PRODUCTS_4K;
+  CATEGORY_PRODUCTS['2k'] = PRODUCTS_2K;
+  CATEGORY_PRODUCTS['fullhd'] = PRODUCTS_FULLHD;
+}
 
 const CATEGORY_PLACEHOLDERS = {
   '4k': '4K.png',
@@ -3005,7 +3015,12 @@ function sortProducts(products, sortType){
 async function applyAllFilters(categoryId) {
   // Загружаем товары из API если еще не загружены
   if (!CATEGORY_PRODUCTS[categoryId] || CATEGORY_PRODUCTS[categoryId].length === 0) {
-    await loadCategoryProducts(categoryId);
+    try {
+      await loadCategoryProducts(categoryId);
+    } catch (error) {
+      console.warn(`Failed to load products for category ${categoryId} in applyAllFilters:`, error);
+      // Продолжаем с fallback данными
+    }
   }
   
   const products = CATEGORY_PRODUCTS[categoryId] || [];
@@ -3396,7 +3411,12 @@ async function renderCategoryProducts(categoryId){
   
   // Загружаем товары из API если еще не загружены
   if (!CATEGORY_PRODUCTS[categoryId] || CATEGORY_PRODUCTS[categoryId].length === 0) {
-    await loadCategoryProducts(categoryId);
+    try {
+      await loadCategoryProducts(categoryId);
+    } catch (error) {
+      console.warn(`Failed to load products for category ${categoryId}:`, error);
+      // Продолжаем с fallback данными
+    }
   }
   
   state.sort = null;
@@ -3819,8 +3839,12 @@ function updateTelegramProfile(){
 }
 
 async function init(){
-  // Загружаем категории из API
-  await loadCategories();
+  // Загружаем категории из API (не блокируем инициализацию при ошибке)
+  try {
+    await loadCategories();
+  } catch (error) {
+    console.warn('Failed to load categories, using fallback:', error);
+  }
   renderCategories();
   
   showCartBadge();
@@ -4181,20 +4205,31 @@ function setupModals(){
           // Получаем или создаем пользователя
           let userId = null;
           const tg = safeTelegram();
-          if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && window.API && window.API.users) {
+          
+          if (window.API && window.API.users) {
             try {
-              const telegramUser = tg.initDataUnsafe.user;
-              const user = await window.API.users.createOrUpdate({
-                telegram_id: telegramUser.id,
-                first_name: telegramUser.first_name,
-                last_name: telegramUser.last_name,
-                username: telegramUser.username,
+              let userData = {
                 phone: orderData.phone,
+                full_name: orderData.name,
                 address: orderData.address || null
-              });
+              };
+              
+              // Если есть данные Telegram, добавляем их
+              if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                const telegramUser = tg.initDataUnsafe.user;
+                userData.telegram_id = telegramUser.id;
+                userData.first_name = telegramUser.first_name;
+                userData.last_name = telegramUser.last_name;
+                userData.username = telegramUser.username;
+              }
+              
+              const user = await window.API.users.createOrUpdate(userData);
               userId = user.id;
+              console.log('User synced with database:', userId);
             } catch (error) {
-              console.warn('Failed to sync user with database:', error);
+              console.error('Failed to sync user with database:', error);
+              // Продолжаем работу даже если не удалось создать пользователя
+              // В этом случае заказ все равно будет сохранен (если есть phone)
             }
           }
           
@@ -4234,10 +4269,24 @@ function setupModals(){
           });
           
           // Сохраняем заказ в БД
-          if (window.API && window.API.orders && userId) {
+          if (window.API && window.API.orders) {
             try {
-              const orderResult = await window.API.orders.create({
-                user_id: userId,
+              // Если userId не получен, пытаемся создать пользователя по телефону
+              if (!userId && orderData.phone) {
+                try {
+                  const tempUser = await window.API.users.createOrUpdate({
+                    phone: orderData.phone,
+                    full_name: orderData.name,
+                    address: orderData.address || null
+                  });
+                  userId = tempUser.id;
+                } catch (userError) {
+                  console.warn('Could not create user for order:', userError);
+                }
+              }
+              
+              // Сохраняем заказ, даже если userId null (API может создать временного пользователя)
+              const orderDataForAPI = {
                 delivery_type: orderData.type,
                 full_name: orderData.name,
                 phone: orderData.phone,
@@ -4246,12 +4295,36 @@ function setupModals(){
                 total_amount: cart.getTotal(),
                 payment_method: paymentMethod,
                 items: orderItems
-              });
+              };
+              
+              // Добавляем user_id только если он есть
+              if (userId) {
+                orderDataForAPI.user_id = userId;
+              }
+              
+              const orderResult = await window.API.orders.create(orderDataForAPI);
               console.log('Order saved to database:', orderResult);
+              
+              // Показываем номер заказа пользователю, если он получен
+              if (orderResult && orderResult.data && orderResult.data.order_number) {
+                const orderNumberEl = qs('#order-number');
+                const orderNumberDisplay = qs('#order-number-display');
+                if (orderNumberEl) {
+                  orderNumberEl.textContent = orderResult.data.order_number;
+                }
+                if (orderNumberDisplay) {
+                  orderNumberDisplay.classList.remove('hidden');
+                }
+              }
             } catch (error) {
               console.error('Failed to save order to database:', error);
+              console.error('Error details:', error.message, error.stack);
               // Продолжаем выполнение даже если не удалось сохранить в БД
+              // Но предупреждаем пользователя
+              alert('Заказ оформлен, но произошла ошибка при сохранении в базу данных. Пожалуйста, свяжитесь с менеджером.');
             }
+          } else {
+            console.warn('API недоступен, заказ не будет сохранен в базу данных');
           }
           
           // Имитация задержки оплаты
@@ -4315,7 +4388,54 @@ function setupModals(){
   }
 }
 
-init();
+// Ждем загрузки DOM и API перед инициализацией
+(function() {
+  let attempts = 0;
+  const maxAttempts = 40; // 2 секунды максимум (40 * 50ms)
+  
+  function waitForAPI() {
+    attempts++;
+    if (window.API) {
+      init().catch(err => {
+        console.error('Initialization error:', err);
+        // Продолжаем работу даже при ошибке
+        initFallback();
+      });
+    } else if (attempts < maxAttempts) {
+      setTimeout(waitForAPI, 50);
+    } else {
+      // API не загрузился за отведенное время, продолжаем с fallback
+      console.warn('API не загрузился, используем fallback данные');
+      initFallback();
+    }
+  }
+  
+  function initFallback() {
+    // Инициализация с fallback данными
+    renderCategories();
+    showCartBadge();
+    showFavBadge();
+    updateProfileFavCount();
+    navigationHistory.length = 0;
+    addToHistory('catalog', 'tab');
+    updateBackButton();
+    updateTelegramProfile();
+    setTimeout(() => updateTelegramProfile(), 500);
+    setupProfileLinks();
+    setupReviewsTabs();
+    setupModals();
+    setupNavigation();
+    setupCart();
+    setupFavorites();
+    setupSearch();
+  }
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', waitForAPI);
+  } else {
+    waitForAPI();
+  }
+})();
 
 // Для отладки в консоли
 window.__AURUM = { cart, favs, PRODUCTS, CATEGORIES };
