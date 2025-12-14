@@ -61,6 +61,7 @@
     .line-clamp-2 {
       display: -webkit-box;
       -webkit-line-clamp: 2;
+      line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
@@ -1157,9 +1158,9 @@
 // Мок-данные (fallback если API недоступен)
 // -----------------------------
 const CATEGORIES_FALLBACK = [
-  { id: '4k', name: '4K Gaming', image: '4K.png' },
-  { id: '2k', name: '2K Gaming', image: '2K.png' },
-  { id: 'fullhd', name: 'Full HD Gaming', image: 'FullHD.png' }
+  { id: '4k', name: '4K Gaming', image: 'photo/4K.png' },
+  { id: '2k', name: '2K Gaming', image: 'photo/2K.png' },
+  { id: 'fullhd', name: 'Full HD Gaming', image: 'photo/FullHD.png' }
 ];
 
 // Глобальные переменные для данных (загружаются из API)
@@ -1243,7 +1244,7 @@ const PC_CONFIGS = {
   '4k': {
     name: 'AURUM 4K Gaming Pro',
     price: 349990,
-    image: '4K.png',
+    image: 'photo/4K.png',
     specs: {
       cpu: 'Intel Core i9-13900K',
       gpu: 'NVIDIA GeForce RTX 4090 24GB',
@@ -1968,9 +1969,9 @@ if (Object.keys(CATEGORY_PRODUCTS).every(key => CATEGORY_PRODUCTS[key].length ==
 }
 
 const CATEGORY_PLACEHOLDERS = {
-  '4k': '4K.png',
-  '2k': '2K.png',
-  'fullhd': 'FullHD.png'
+  '4k': 'photo/4K.png',
+  '2k': 'photo/2K.png',
+  'fullhd': 'photo/FullHD.png'
 };
 
 // Состояние сортировки/поиска/фильтров по категориям
@@ -2158,6 +2159,36 @@ function findProductById(id){
   return pGeneric || null;
 }
 
+// Вспомогательная функция для получения данных конфигурированного товара
+function getConfigProductData(idStr, configData){
+  const isChanged = isConfigChanged(configData.productId, configData.config);
+  const name = configData.baseName;
+  let specs;
+  if(isChanged){
+    specs = `${configData.config.cpu.name}, ${configData.config.gpu.name}`;
+  } else {
+    const baseProduct = findProductById(configData.productId);
+    if(baseProduct){
+      specs = `${baseProduct.cpu || ''}${baseProduct.cpu && baseProduct.gpu ? ', ' : ''}${baseProduct.gpu || ''}`;
+    } else {
+      specs = `${configData.config.cpu.name}, ${configData.config.gpu.name}`;
+    }
+  }
+  return { name, specs, price: configData.price, image: configData.image };
+}
+
+// Вспомогательная функция для получения данных ПК
+function getPCProductData(categoryId){
+  const pcConfig = PC_CONFIGS[categoryId];
+  if(!pcConfig) return null;
+  return {
+    name: pcConfig.name,
+    price: pcConfig.price,
+    image: pcConfig.image,
+    specs: `${pcConfig.specs.cpu}, ${pcConfig.specs.gpu}`
+  };
+}
+
 // Проверка, изменена ли конфигурация по сравнению с базовой
 function isConfigChanged(productId, config){
   const productConfig = PRODUCT_CONFIGS[productId];
@@ -2199,30 +2230,10 @@ class Cart {
       if(idStr.startsWith('config-')){
         const configData = safeLocalStorageGet(`config_${idStr}`, null);
         if(configData){
-          const isChanged = isConfigChanged(configData.productId, configData.config);
-          // Всегда показываем стоковое название
-          const name = configData.baseName;
-          // В specs показываем новые элементы только если конфигурация изменена
-          let specs;
-          if(isChanged){
-            // Если конфигурация изменена, показываем новые элементы
-            specs = `${configData.config.cpu.name}, ${configData.config.gpu.name}`;
-          } else {
-            // Если конфигурация не изменена, показываем базовые характеристики из исходного товара
-            const baseProduct = findProductById(configData.productId);
-            if(baseProduct){
-              specs = `${baseProduct.cpu || ''}${baseProduct.cpu && baseProduct.gpu ? ', ' : ''}${baseProduct.gpu || ''}`;
-            } else {
-              specs = `${configData.config.cpu.name}, ${configData.config.gpu.name}`;
-            }
-          }
-          
+          const productData = getConfigProductData(idStr, configData);
           return {
             id: it.id,
-            name: name,
-            price: configData.price,
-            image: configData.image,
-            specs: specs,
+            ...productData,
             qty: it.qty
           };
         }
@@ -2230,14 +2241,11 @@ class Cart {
       // Проверяем, является ли это ПК
       if(idStr.startsWith('pc-')){
         const categoryId = idStr.replace('pc-', '');
-        const pcConfig = PC_CONFIGS[categoryId];
-        if(pcConfig){
+        const productData = getPCProductData(categoryId);
+        if(productData){
           return {
             id: it.id,
-            name: pcConfig.name,
-            price: pcConfig.price,
-            image: pcConfig.image,
-            specs: `${pcConfig.specs.cpu}, ${pcConfig.specs.gpu}`,
+            ...productData,
             qty: it.qty
           };
         }
@@ -2602,50 +2610,35 @@ function renderFavorites(){
     // Проверяем, является ли это конфигурированным товаром
     const idStr = String(id);
     if(idStr.startsWith('config-')){
-      const configData = safeLocalStorageGet(`fav_config_${idStr}`, null);
+      // Пробуем получить данные из fav_config_ или config_
+      const configData = safeLocalStorageGet(`fav_config_${idStr}`, null) || 
+                         safeLocalStorageGet(`config_${idStr}`, null);
       if(configData){
-        const isChanged = isConfigChanged(configData.productId, configData.config);
-        // Всегда показываем стоковое название
-        const name = configData.baseName;
-        // В specs показываем новые элементы только если конфигурация изменена
-        let specs;
-        if(isChanged){
-          // Если конфигурация изменена, показываем новые элементы
-          specs = `${configData.config.cpu.name}, ${configData.config.gpu.name}`;
-        } else {
-          // Если конфигурация не изменена, показываем базовые характеристики из исходного товара
-          const baseProduct = findProductById(configData.productId);
-          if(baseProduct){
-            specs = `${baseProduct.cpu || ''}${baseProduct.cpu && baseProduct.gpu ? ', ' : ''}${baseProduct.gpu || ''}`;
-          } else {
-            specs = `${configData.config.cpu.name}, ${configData.config.gpu.name}`;
-          }
-        }
-        
+        const productData = getConfigProductData(idStr, configData);
         // Для конфигурированных товаров используем specs как название
-        const displayName = specs || name;
+        const displayName = productData.specs || productData.name;
         return {
           id: id,
           name: displayName,
-          price: configData.price,
-          image: configData.image,
-          specs: specs
+          price: productData.price,
+          image: productData.image,
+          specs: productData.specs
         };
       }
     }
     // Проверяем, является ли это ПК
     if(idStr.startsWith('pc-')){
       const categoryId = idStr.replace('pc-', '');
-      const pcConfig = PC_CONFIGS[categoryId];
-      if(pcConfig){
+      const productData = getPCProductData(categoryId);
+      if(productData){
         // Для ПК используем только характеристики как название
-        const displayName = `${pcConfig.specs.cpu} | ${pcConfig.specs.gpu}`;
+        const displayName = productData.specs.replace(', ', ' | ');
         return {
           id: id,
           name: displayName,
-          price: pcConfig.price,
-          image: pcConfig.image,
-          specs: `${pcConfig.specs.cpu}, ${pcConfig.specs.gpu}`
+          price: productData.price,
+          image: productData.image,
+          specs: productData.specs
         };
       }
     }
@@ -2955,30 +2948,24 @@ function openTab(tabId){
 // навешиваем события на навигационные кнопки
 qsa('[data-tab]').forEach(btn => btn.addEventListener('click', ()=> openTab(btn.dataset.tab)));
 
-// Обработчик кнопки "Назад к каталогу"
-qs('#back-to-catalog').addEventListener('click', () => {
-  openTab('catalog');
+// Обработчики кнопок "Перейти в каталог" (оптимизировано)
+['#back-to-catalog', '#go-to-catalog', '#go-to-catalog-from-fav'].forEach(selector => {
+  const btn = qs(selector);
+  if(btn) {
+    btn.addEventListener('click', () => {
+      openTab('catalog');
+    });
+  }
 });
 
-// Обработчик кнопки "Перейти в каталог" в корзине
-qs('#go-to-catalog').addEventListener('click', () => {
-  openTab('catalog');
-});
-
-// Обработчик кнопки "Перейти в каталог" в избранном
-qs('#go-to-catalog-from-fav').addEventListener('click', () => {
-  openTab('catalog');
-});
-
-// Обработчики для страницы товаров 4K Gaming
-qs('#breadcrumb-catalog-4k').addEventListener('click', () => {
-  openTabWithoutHistory('catalog');
-});
-qs('#breadcrumb-catalog-2k').addEventListener('click', () => {
-  openTabWithoutHistory('catalog');
-});
-qs('#breadcrumb-catalog-fullhd').addEventListener('click', () => {
-  openTabWithoutHistory('catalog');
+// Обработчики для breadcrumbs категорий (оптимизировано)
+['4k', '2k', 'fullhd'].forEach(cat => {
+  const breadcrumb = qs(`#breadcrumb-catalog-${cat}`);
+  if(breadcrumb) {
+    breadcrumb.addEventListener('click', () => {
+      openTabWithoutHistory('catalog');
+    });
+  }
 });
 
 // Дебаунсеры поиска по категориям
@@ -3057,10 +3044,13 @@ async function applyAllFilters(categoryId) {
   renderCategoryProductsFiltered(categoryId, sorted);
 }
 
-// Поиск по категориям
-qs('#search-4k').addEventListener('input', (e) => CATEGORY_SEARCH_DEBOUNCERS['4k'](e.target.value));
-qs('#search-2k').addEventListener('input', (e) => CATEGORY_SEARCH_DEBOUNCERS['2k'](e.target.value));
-qs('#search-fullhd').addEventListener('input', (e) => CATEGORY_SEARCH_DEBOUNCERS['fullhd'](e.target.value));
+// Поиск по категориям (оптимизировано)
+['4k', '2k', 'fullhd'].forEach(cat => {
+  const searchInput = qs(`#search-${cat}`);
+  if(searchInput && CATEGORY_SEARCH_DEBOUNCERS[cat]) {
+    searchInput.addEventListener('input', (e) => CATEGORY_SEARCH_DEBOUNCERS[cat](e.target.value));
+  }
+});
 
 // Кнопки сортировки и фильтров для категорий
 ['4k','2k','fullhd'].forEach(cat => {
@@ -3070,55 +3060,70 @@ qs('#search-fullhd').addEventListener('input', (e) => CATEGORY_SEARCH_DEBOUNCERS
   if(sortBtn){
     sortBtn.addEventListener('click', () => {
       currentModalCategory = cat;
-      const modal = qs('#sort-modal');
-      const modalContent = modal.querySelector('div');
-      const bottomNav = qs('nav');
-      if(bottomNav) bottomNav.classList.add('hidden');
-      modal.classList.remove('hidden');
-      // Запускаем анимацию выезжания
-      setTimeout(() => {
-        modalContent.classList.remove('translate-y-full');
-      }, 10);
-      const state = CATEGORY_STATE[cat];
-      if(state.sort){
-        const radio = qs(`input[name="sort"][value="${state.sort}"]`);
-        if(radio) radio.checked = true;
-      } else {
-        qsa('input[name="sort"]').forEach(r => r.checked = false);
-      }
+      openModal('#sort-modal', () => {
+        const state = CATEGORY_STATE[cat];
+        if(state && state.sort){
+          const radio = qs(`input[name="sort"][value="${state.sort}"]`);
+          if(radio) radio.checked = true;
+        } else {
+          qsa('input[name="sort"]').forEach(r => r.checked = false);
+        }
+      });
     });
   }
 
   if(filterBtn){
     filterBtn.addEventListener('click', () => {
       currentModalCategory = cat;
-      const modal = qs('#filter-modal');
-      const modalContent = modal.querySelector('div');
-      const bottomNav = qs('nav');
-      if(bottomNav) bottomNav.classList.add('hidden');
-      modal.classList.remove('hidden');
-      // Запускаем анимацию выезжания
-      setTimeout(() => {
-        modalContent.classList.remove('translate-y-full');
-      }, 10);
-      const state = CATEGORY_STATE[cat];
-      qs('#price-from').value = state.price.from || '';
-      qs('#price-to').value = state.price.to || '';
+      openModal('#filter-modal', () => {
+        const state = CATEGORY_STATE[cat];
+        if(state){
+          qs('#price-from').value = state.price.from || '';
+          qs('#price-to').value = state.price.to || '';
+        }
+      });
     });
   }
 });
 
-// Функция закрытия модального окна сортировки
-function closeSortModal(){
-  const modal = qs('#sort-modal');
+// Универсальная функция для открытия модального окна
+function openModal(modalId, onOpen = null){
+  const modal = qs(modalId);
+  if(!modal) return;
+  
   const modalContent = modal.querySelector('div');
   const bottomNav = qs('nav');
-  modalContent.classList.add('translate-y-full');
+  if(bottomNav) bottomNav.classList.add('hidden');
+  modal.classList.remove('hidden');
+  
+  // Запускаем анимацию выезжания
+  setTimeout(() => {
+    if(modalContent) modalContent.classList.remove('translate-y-full');
+    if(onOpen) onOpen();
+  }, 10);
+}
+
+// Универсальная функция для закрытия модального окна
+function closeModal(modalId, onClose = null){
+  const modal = qs(modalId);
+  if(!modal) return;
+  
+  const modalContent = modal.querySelector('div');
+  const bottomNav = qs('nav');
+  if(modalContent) modalContent.classList.add('translate-y-full');
+  
   setTimeout(() => {
     modal.classList.add('hidden');
     if(bottomNav) bottomNav.classList.remove('hidden');
-    currentModalCategory = null;
+    if(onClose) onClose();
   }, 300);
+}
+
+// Функция закрытия модального окна сортировки
+function closeSortModal(){
+  closeModal('#sort-modal', () => {
+    currentModalCategory = null;
+  });
 }
 
 // Закрытие модального окна сортировки
@@ -3150,15 +3155,9 @@ qs('#apply-sort').addEventListener('click', () => {
 
 // Функция закрытия модального окна фильтров
 function closeFilterModal(){
-  const modal = qs('#filter-modal');
-  const modalContent = modal.querySelector('div');
-  const bottomNav = qs('nav');
-  modalContent.classList.add('translate-y-full');
-  setTimeout(() => {
-    modal.classList.add('hidden');
-    if(bottomNav) bottomNav.classList.remove('hidden');
+  closeModal('#filter-modal', () => {
     currentModalCategory = null;
-  }, 300);
+  });
 }
 
 // Закрытие модального окна фильтров
@@ -3323,7 +3322,7 @@ function renderPCProductCard(categoryId){
 function renderCategoryProductsFiltered(categoryId, products = CATEGORY_PRODUCTS[categoryId] || []){
   const container = qs(`#products-${categoryId}-grid`);
   if(!container) return;
-  const placeholder = CATEGORY_PLACEHOLDERS[categoryId] || '4K.png';
+  const placeholder = CATEGORY_PLACEHOLDERS[categoryId] || 'photo/4K.png';
   const cartClass = `add-cart-${categoryId}`;
   const favClass = `add-fav-${categoryId}`;
 
@@ -3487,7 +3486,7 @@ function renderConfigurator(productId){
   container.innerHTML = `
     <!-- Изображение ПК -->
     <div class="mb-6 w-full bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center p-4" style="height: 300px;">
-      <img src="${config.image}" alt="${config.name}" class="w-full h-full object-contain" loading="lazy" onerror="this.src='${CATEGORY_PLACEHOLDERS[categoryId] || '4K.png'}'">
+      <img src="${config.image}" alt="${config.name}" class="w-full h-full object-contain" loading="lazy" onerror="this.src='${CATEGORY_PLACEHOLDERS[categoryId] || 'photo/4K.png'}'">
     </div>
 
     <!-- Текущие характеристики -->
@@ -4424,10 +4423,6 @@ function setupModals(){
     setupProfileLinks();
     setupReviewsTabs();
     setupModals();
-    setupNavigation();
-    setupCart();
-    setupFavorites();
-    setupSearch();
   }
   
   if (document.readyState === 'loading') {
