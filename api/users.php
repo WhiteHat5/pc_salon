@@ -10,12 +10,12 @@ require_once __DIR__ . '/config.php';
 try {
     $pdo = getDBConnection();
 
-    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        $telegramId = $_GET['telegram_id'] ?? null;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $data = getPostData();
 
-        if (!$telegramId) {
-            sendError('Параметр telegram_id обязателен', 400);
-        }
+		if (!$data || empty($data['telegram_id'])) {
+			sendError('telegram_id обязателен', 400);
+		}
 
         $stmt = $pdo->prepare("SELECT id, telegram_id, first_name, last_name, username, phone, full_name, address FROM users WHERE telegram_id = ?");
         $stmt->execute([$telegramId]);
