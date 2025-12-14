@@ -1,27 +1,34 @@
 <?php
 /**
- * API для работы с категориями
+ * API: Получение списка категорий
+ * GET /api/categories.php
+ * Возвращает все категории из БД
  */
 
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
 
-$method = $_SERVER['REQUEST_METHOD'];
-$pdo = getDBConnection();
+try {
+    $pdo = getDBConnection();
 
-switch ($method) {
-    case 'GET':
-        // Получить список всех категорий
-        try {
-            $stmt = $pdo->query("SELECT * FROM categories ORDER BY display_order ASC");
-            $categories = $stmt->fetchAll();
-            sendJSON(['success' => true, 'data' => $categories]);
-        } catch (PDOException $e) {
-            sendError('Failed to fetch categories: ' . $e->getMessage(), 500);
-        }
-        break;
-        
-    default:
-        sendError('Method not allowed', 405);
-        break;
+    $stmt = $pdo->query("
+        SELECT 
+            id, 
+            name, 
+            image, 
+            display_order AS displayOrder 
+        FROM categories 
+        ORDER BY display_order ASC
+    ");
+
+    $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Ответ в формате, который ожидает твой api.js
+    sendJSON([
+        'success' => true,
+        'categories' => $categories
+    ]);
+
+} catch (Exception $e) {
+    error_log('Categories API error: ' . $e->getMessage());
+    sendError('Не удалось загрузить категории', 500);
 }
-
