@@ -1,50 +1,93 @@
 <?php
 /**
- * API для работы с товарами
+ * API: Товары (готовые сборки ПК)
+ * 
+ * GET /api/products.php                  → все товары
+ * GET /api/products.php?category=4k      → товары только из категории 4k (или 2k, fullhd)
+ * GET /api/products.php?id=101           → один товар по ID (для будущего использования)
  */
 
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
 
-$method = $_SERVER['REQUEST_METHOD'];
-$pdo = getDBConnection();
+try {
+    $pdo = getDBConnection();
 
-switch ($method) {
-    case 'GET':
-        // Получить товары
-        $categoryId = $_GET['category_id'] ?? null;
-        $productId = $_GET['id'] ?? null;
-        
-        try {
-            if ($productId) {
-                // Получить один товар по ID
-                $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ? AND is_active = 1");
-                $stmt->execute([$productId]);
-                $product = $stmt->fetch();
-                
-                if (!$product) {
-                    sendError('Product not found', 404);
-                }
-                
-                sendJSON(['success' => true, 'data' => $product]);
-            } elseif ($categoryId) {
-                // Получить товары по категории
-                $stmt = $pdo->prepare("SELECT * FROM products WHERE category_id = ? AND is_active = 1 ORDER BY id ASC");
-                $stmt->execute([$categoryId]);
-                $products = $stmt->fetchAll();
-                sendJSON(['success' => true, 'data' => $products]);
-            } else {
-                // Получить все товары
-                $stmt = $pdo->query("SELECT * FROM products WHERE is_active = 1 ORDER BY category_id, id ASC");
-                $products = $stmt->fetchAll();
-                sendJSON(['success' => true, 'data' => $products]);
-            }
-        } catch (PDOException $e) {
-            sendError('Failed to fetch products: ' . $e->getMessage(), 500);
+    // Параметры запроса
+    $category = $_GET['category'] ?? null;
+    $productId = $_GET['id'] ?? null;
+
+    if ($productId !== null) {
+        // Получение одного товара по ID
+        $stmt = $pdo->prepare("
+            SELECT 
+                id,
+                name,
+                price,
+                image,
+                cpu,
+                gpu,
+                description
+            FROM products 
+            WHERE id = ? AND is_active = 1
+        ");
+        $stmt->execute([(int)$productId]);
+        $product = $stmt->fetch();
+
+        if (!$product) {
+            sendError('Товар не найден', 404);
         }
-        break;
-        
-    default:
-        sendError('Method not allowed', 405);
-        break;
-}
 
+        sendJSON([
+            'success' => true,
+            'product' => $product
+        ]);
+    } elseif ($category !== null) {
+        // Товары по категории
+        $stmt = $pdo->prepare("
+            SELECT 
+                id,
+                name,
+                price,
+                image,
+                cpu,
+                gpu,
+                description
+            FROM products 
+            WHERE category_id = ? AND is_active = 1
+            ORDER BY id ASC
+        ");
+        $stmt->execute([$category]);
+        $products = $stmt->fetchAll();
+
+        sendJSON([
+            'success' => true,
+            'products' => $products
+        ]);
+    } else {
+        // Все товары (для поиска или админки)
+        $stmt = $pdo->query("
+            SELECT 
+                id,
+                name,
+                price,
+                image,
+                cpu,
+                gpu,
+                category_id,
+                description
+            FROM products 
+            WHERE is_active = 1
+            ORDER BY category_id, id
+        ");
+        $products = $stmt->fetchAll();
+
+        sendJSON([
+            'success' => true,
+            'products' => $products
+        ]);
+    }
+
+} catch (Exception $e) {
+    error_log('Products API error: ' . $e->getMessage());
+    sendError('Не удалось загрузить товары', 500);
+}
