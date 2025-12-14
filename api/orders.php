@@ -4,9 +4,6 @@
  * POST /api/orders.php — создание нового заказа
  * Тело запроса: JSON с данными заказа и массивом items
  */
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
 
 require_once __DIR__ . '/config.php';
 
@@ -86,6 +83,12 @@ try {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    error_log('Orders API error: ' . $e->getMessage());
-    sendError('Не удалось сохранить заказ: ' . $e->getMessage(), 500);
+    error_log('Orders API error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+
+    // Временно выводим ошибку в ответ (только для теста!)
+    sendJSON([
+        'success' => false,
+        'error' => 'Ошибка сохранения заказа: ' . $e->getMessage(),
+        'trace' => $e->getTraceAsString() // Удалить в продакшене!
+    ], 500);
 }
