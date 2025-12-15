@@ -81,11 +81,27 @@ try {
         $pdo->beginTransaction();
 
         // Генерация номера заказа (с защитой от дубликатов)
-        $maxAttempts = 10;
+        // Используем максимальный существующий номер + 1, а не COUNT
+        $year = date('Y');
+        $stmt = $pdo->prepare("SELECT order_number FROM orders WHERE order_number LIKE ? ORDER BY order_number DESC LIMIT 1");
+        $stmt->execute(["AURUM-{$year}-%"]);
+        $lastOrder = $stmt->fetch();
+        
         $orderNumber = null;
+        if ($lastOrder) {
+            // Извлекаем номер из последнего заказа (например, AURUM-2025-0019 -> 19)
+            $parts = explode('-', $lastOrder['order_number']);
+            $lastNumber = (int)end($parts);
+            $nextNumber = $lastNumber + 1;
+        } else {
+            // Если заказов за этот год нет, начинаем с 1
+            $nextNumber = 1;
+        }
+        
+        // Генерируем номер и проверяем уникальность
+        $maxAttempts = 100; // Увеличиваем количество попыток
         for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
-            $count = $pdo->query("SELECT COUNT(*) FROM orders")->fetchColumn() + 1;
-            $orderNumber = 'AURUM-' . date('Y') . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+            $orderNumber = 'AURUM-' . $year . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
             
             // Проверяем, не существует ли уже такой номер
             $stmt = $pdo->prepare("SELECT id FROM orders WHERE order_number = ?");
@@ -93,12 +109,12 @@ try {
             if (!$stmt->fetch()) {
                 break; // Номер уникален
             }
-            // Если номер существует, пробуем снова с другим счетчиком
-            usleep(100000); // Небольшая задержка 0.1 секунды
+            // Если номер существует, пробуем следующий
+            $nextNumber++;
         }
         
         if (!$orderNumber) {
-            throw new Exception('Не удалось сгенерировать уникальный номер заказа');
+            throw new Exception('Не удалось сгенерировать уникальный номер заказа после ' . $maxAttempts . ' попыток');
         }
 
         // Основные данные заказа
