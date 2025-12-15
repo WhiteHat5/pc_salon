@@ -4378,15 +4378,18 @@ function setupModals(){
             } catch (error) {
               console.error('Failed to save order to database:', error);
               console.error('Error details:', error.message, error.stack);
-              console.error('Order data that failed:', orderDataForAPI);
+              console.error('Order data that failed:', JSON.stringify(orderDataForAPI, null, 2));
               
-              // Показываем более подробную ошибку в консоли для отладки
-              // В продакшене можно убрать детали
-              const errorMessage = error.message || 'Неизвестная ошибка';
+              // Показываем более понятное сообщение об ошибке
+              let userErrorMessage = 'Произошла ошибка при сохранении заказа';
+              if (error.message) {
+                userErrorMessage = error.message;
+              } else if (error.response && error.response.error) {
+                userErrorMessage = error.response.error;
+              }
               
-              // Продолжаем выполнение даже если не удалось сохранить в БД
-              // Но предупреждаем пользователя
-              alert('Заказ оформлен, но произошла ошибка при сохранении в базу данных.\n\nОшибка: ' + errorMessage + '\n\nПожалуйста, свяжитесь с менеджером и сообщите номер заказа (если он был показан).');
+              // Показываем ошибку пользователю
+              alert('Ошибка при оформлении заказа:\n\n' + userErrorMessage + '\n\nПожалуйста, попробуйте еще раз или свяжитесь с менеджером.');
             }
           } else {
             console.warn('API недоступен, заказ не будет сохранен в базу данных');
