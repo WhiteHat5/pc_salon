@@ -64,6 +64,11 @@ try {
             sendError('Некорректный JSON', 400);
         }
 
+        // Логирование для отладки (только в режиме разработки)
+        if (isset($_GET['debug'])) {
+            error_log('Order data received: ' . json_encode($data, JSON_UNESCAPED_UNICODE));
+        }
+
         $pdo->beginTransaction();
 
         // Генерация номера заказа
@@ -71,18 +76,28 @@ try {
         $orderNumber = 'AURUM-' . date('Y') . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
 
         // Основные данные заказа
-        $userId        = $data['user_id'] ?? null;
+        $userId        = isset($data['user_id']) && $data['user_id'] !== null && $data['user_id'] !== '' ? (int)$data['user_id'] : null;
         $deliveryType  = $data['delivery_type'] ?? 'pickup';
-        $fullName      = $data['full_name'] ?? '';
-        $phone         = $data['phone'] ?? '';
-        $address       = $data['address'] ?? null;
-        $comment       = $data['comment'] ?? null;
+        $fullName      = trim($data['full_name'] ?? '');
+        $phone         = trim($data['phone'] ?? '');
+        $address       = !empty($data['address']) ? trim($data['address']) : null;
+        $comment       = !empty($data['comment']) ? trim($data['comment']) : null;
         $totalAmount   = (float)($data['total_amount'] ?? 0);
         $paymentMethod = $data['payment_method'] ?? 'cash';
         $items         = $data['items'] ?? [];
 
-        if (empty($items) || empty($fullName) || empty($phone) || $totalAmount <= 0) {
-            throw new Exception('Обязательные поля не заполнены');
+        // Валидация
+        if (empty($items) || !is_array($items)) {
+            throw new Exception('Список товаров пуст или некорректен');
+        }
+        if (empty($fullName)) {
+            throw new Exception('Не указано имя');
+        }
+        if (empty($phone)) {
+            throw new Exception('Не указан телефон');
+        }
+        if ($totalAmount <= 0) {
+            throw new Exception('Сумма заказа должна быть больше нуля');
         }
 
         // Создаём заказ
@@ -101,26 +116,52 @@ try {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
 
-        foreach ($items as $item) {
-            $productId = !empty($item['product_id']) ? (int)$item['product_id'] : null;
-            $itemType  = $item['item_type'] ?? 'product';
+        foreach ($items as $index => $item) {
+            try {
+                $productId = isset($item['product_id']) && $item['product_id'] !== null && $item['product_id'] !== '' 
+                    ? (int)$item['product_id'] 
+                    : null;
+                $itemType  = $item['item_type'] ?? 'product';
 
-            // Для типов 'config' и 'pc' product_id может быть NULL — это нормально
-            if ($itemType !== 'product' && $productId !== null) {
-                $productId = null; // Принудительно обнуляем для кастомных и PC
+                // Для типов 'config' и 'pc' product_id может быть NULL — это нормально
+                if ($itemType !== 'product' && $productId !== null) {
+                    $productId = null; // Принудительно обнуляем для кастомных и PC
+                }
+
+                $itemName = $item['item_name'] ?? 'Без названия';
+                $itemSpecs = !empty($item['item_specs']) ? $item['item_specs'] : null;
+                $quantity = isset($item['quantity']) ? max(1, (int)$item['quantity']) : 1;
+                $unitPrice = (float)($item['unit_price'] ?? 0);
+                $totalPrice = (float)($item['total_price'] ?? 0);
+                
+                // Если total_price не указан, вычисляем
+                if ($totalPrice <= 0) {
+                    $totalPrice = $unitPrice * $quantity;
+                }
+
+                $configData = null;
+                if (isset($item['config_data']) && $item['config_data'] !== null) {
+                    if (is_array($item['config_data'])) {
+                        $configData = json_encode($item['config_data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    } else {
+                        $configData = $item['config_data']; // Уже JSON строка
+                    }
+                }
+
+                $stmtItem->execute([
+                    $orderId,
+                    $productId, // Может быть NULL
+                    $itemType,
+                    $itemName,
+                    $itemSpecs,
+                    $quantity,
+                    $unitPrice,
+                    $totalPrice,
+                    $configData
+                ]);
+            } catch (Exception $e) {
+                throw new Exception("Ошибка при добавлении товара #" . ($index + 1) . ": " . $e->getMessage());
             }
-
-            $stmtItem->execute([
-                $orderId,
-                $productId, // Может быть NULL
-                $itemType,
-                $item['item_name'] ?? 'Без названия',
-                $item['item_specs'] ?? null,
-                $item['quantity'] ?? 1,
-                (float)($item['unit_price'] ?? 0),
-                (float)($item['total_price'] ?? 0),
-                isset($item['config_data']) ? json_encode($item['config_data'], JSON_UNESCAPED_UNICODE) : null
-            ]);
         }
 
         $pdo->commit();
@@ -146,10 +187,25 @@ try {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    error_log('Orders API error: ' . $e->getMessage());
-
-    sendJSON([
+    
+    $errorMessage = $e->getMessage();
+    $errorTrace = $e->getTraceAsString();
+    
+    error_log('Orders API error: ' . $errorMessage);
+    error_log('Orders API error trace: ' . $errorTrace);
+    
+    // В режиме отладки возвращаем более подробную информацию
+    $errorResponse = [
         'success' => false,
-        'error' => 'Ошибка сохранения заказа: ' . $e->getMessage()
-    ], 500);
+        'error' => 'Ошибка сохранения заказа: ' . $errorMessage
+    ];
+    
+    if (isset($_GET['debug'])) {
+        $errorResponse['debug'] = [
+            'message' => $errorMessage,
+            'trace' => $errorTrace
+        ];
+    }
+    
+    sendJSON($errorResponse, 500);
 }

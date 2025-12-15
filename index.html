@@ -4256,14 +4256,13 @@ function setupModals(){
             
             return {
               product_id: productId,
-              config_id: configId,
               item_type: itemType,
               item_name: item.name || ((item.cpu || '') + (item.cpu && item.gpu ? ' | ' : '') + (item.gpu || '')),
               item_specs: item.specs || ((item.cpu || '') + (item.cpu && item.gpu ? ' | ' : '') + (item.gpu || '')),
               quantity: item.qty || 1,
               unit_price: item.price || 0,
               total_price: (item.price || 0) * (item.qty || 1),
-              config_data: configData
+              config_data: configData // Включаем config_data только если есть
             };
           });
           
@@ -4301,8 +4300,14 @@ function setupModals(){
                 orderDataForAPI.user_id = userId;
               }
               
+              console.log('Sending order data to API:', orderDataForAPI);
               const orderResult = await window.API.orders.create(orderDataForAPI);
               console.log('Order saved to database:', orderResult);
+              
+              // Проверяем успешность операции
+              if (!orderResult || (!orderResult.order_number && !orderResult.data?.order_number)) {
+                throw new Error('Заказ не был создан. Ответ сервера: ' + JSON.stringify(orderResult));
+              }
               
               // Показываем номер заказа пользователю, если он получен
               const orderNumber = orderResult?.order_number || orderResult?.data?.order_number;
@@ -4319,9 +4324,15 @@ function setupModals(){
             } catch (error) {
               console.error('Failed to save order to database:', error);
               console.error('Error details:', error.message, error.stack);
+              console.error('Order data that failed:', orderDataForAPI);
+              
+              // Показываем более подробную ошибку в консоли для отладки
+              // В продакшене можно убрать детали
+              const errorMessage = error.message || 'Неизвестная ошибка';
+              
               // Продолжаем выполнение даже если не удалось сохранить в БД
               // Но предупреждаем пользователя
-              alert('Заказ оформлен, но произошла ошибка при сохранении в базу данных. Пожалуйста, свяжитесь с менеджером.');
+              alert('Заказ оформлен, но произошла ошибка при сохранении в базу данных.\n\nОшибка: ' + errorMessage + '\n\nПожалуйста, свяжитесь с менеджером и сообщите номер заказа (если он был показан).');
             }
           } else {
             console.warn('API недоступен, заказ не будет сохранен в базу данных');
