@@ -31,3 +31,14 @@ desktop.ini
 *.pem
 *.key
 *.crt
+
+# Тестовые файлы API
+api/test_products.php
+api/check_db.php
+
+# Дубликаты файлов (если есть)
+api/admin.php
+
+# Конфигурация с чувствительными данными (если создаете отдельный файл)
+config.local.php
+.env

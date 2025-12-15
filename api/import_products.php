@@ -1,14 +1,17 @@
 <?php
 /**
- * Скрипт для импорта товаров в базу данных
- * Запускается один раз для заполнения базы начальными данными
+ * Скрипт для импорта товаров из index.html в базу данных
+ * Запускается один раз для переноса данных
+ * 
+ * ВАЖНО: Перед запуском убедитесь, что:
+ * 1. База данных создана и таблицы существуют
+ * 2. Категории уже добавлены в БД
+ * 3. Этот скрипт запускается через браузер или командную строку
  */
 
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
 
-$pdo = getDBConnection();
-
-// Данные товаров (из вашего index.html)
+// Данные товаров из index.html
 $products = [
     // 4K Gaming
     ['category_id' => '4k', 'name' => 'AURUM 4K Pro', 'price' => 349990, 'image' => 'photo/pc4_1.jpg', 'cpu' => 'i9-13900K', 'gpu' => 'RTX4090'],
@@ -30,32 +33,64 @@ $products = [
 ];
 
 try {
+    $pdo = getDBConnection();
     $pdo->beginTransaction();
     
     $stmt = $pdo->prepare("
         INSERT INTO products (category_id, name, price, image, cpu, gpu, is_active) 
         VALUES (?, ?, ?, ?, ?, ?, 1)
+        ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            price = VALUES(price),
+            image = VALUES(image),
+            cpu = VALUES(cpu),
+            gpu = VALUES(gpu)
     ");
     
     $imported = 0;
+    $updated = 0;
+    
     foreach ($products as $product) {
-        $stmt->execute([
-            $product['category_id'],
-            $product['name'],
-            $product['price'],
-            $product['image'],
-            $product['cpu'],
-            $product['gpu']
-        ]);
-        $imported++;
+        try {
+            $stmt->execute([
+                $product['category_id'],
+                $product['name'],
+                $product['price'],
+                $product['image'],
+                $product['cpu'],
+                $product['gpu']
+            ]);
+            
+            // Проверяем, был ли это INSERT или UPDATE
+            if ($stmt->rowCount() > 0) {
+                $imported++;
+            }
+        } catch (PDOException $e) {
+            // Если товар уже существует (по уникальному ключу), пропускаем
+            if ($e->getCode() !== '23000') {
+                throw $e;
+            }
+            $updated++;
+        }
     }
     
     $pdo->commit();
     
-    echo "Successfully imported {$imported} products!\n";
+    sendJSON([
+        'success' => true,
+        'message' => "Импорт завершен! Добавлено: {$imported}, Обновлено: {$updated}"
+    ]);
     
 } catch (PDOException $e) {
-    $pdo->rollBack();
-    echo "Error importing products: " . $e->getMessage() . "\n";
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log('Import error: ' . $e->getMessage());
+    sendError('Ошибка импорта: ' . $e->getMessage(), 500);
+} catch (Exception $e) {
+    if (isset($pdo) && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    error_log('Import error: ' . $e->getMessage());
+    sendError('Ошибка импорта: ' . $e->getMessage(), 500);
 }
-

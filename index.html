@@ -1051,7 +1051,7 @@
 <!-- Для GitHub Pages раскомментируйте и укажите ваш публичный URL API: -->
 <script>
   window.API_URL = 'https://unsegmentary-jayna-unlucky.ngrok-free.dev/pc_salon/api'; // Замените на ваш публичный URL API
-</script> -->
+</script>
 <!-- API модуль (загружается перед основным скриптом) -->
 <script src="js/api.js"></script>
 <script>
@@ -4305,11 +4305,12 @@ function setupModals(){
               console.log('Order saved to database:', orderResult);
               
               // Показываем номер заказа пользователю, если он получен
-              if (orderResult && orderResult.data && orderResult.data.order_number) {
+              const orderNumber = orderResult?.order_number || orderResult?.data?.order_number;
+              if (orderNumber) {
                 const orderNumberEl = qs('#order-number');
                 const orderNumberDisplay = qs('#order-number-display');
                 if (orderNumberEl) {
-                  orderNumberEl.textContent = orderResult.data.order_number;
+                  orderNumberEl.textContent = orderNumber;
                 }
                 if (orderNumberDisplay) {
                   orderNumberDisplay.classList.remove('hidden');

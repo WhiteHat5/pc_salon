@@ -22,10 +22,11 @@ try {
 
     $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Ответ в формате, который ожидает твой api.js
+    // Ответ в формате, который ожидает api.js
     sendJSON([
         'success' => true,
-        'categories' => $categories
+        'data' => $categories,
+        'categories' => $categories // Для обратной совместимости
     ]);
 
 } catch (Exception $e) {

@@ -6,6 +6,16 @@
 
 declare(strict_types=1);
 
+// Отключаем вывод ошибок PHP (чтобы не ломать JSON ответы)
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
+// Включаем буферизацию вывода для перехвата любых неожиданных выводов
+if (!ob_get_level()) {
+    ob_start();
+}
+
 // === Настройки базы данных ===
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'pc_salon');
@@ -29,8 +39,14 @@ function getDBConnection(): PDO
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
             error_log("Database connection error: " . $e->getMessage());
+            // Очищаем буфер перед отправкой ошибки
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
             http_response_code(500);
-            sendJSON(['error' => 'Не удалось подключиться к базе данных'], 500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'Не удалось подключиться к базе данных'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
         }
     }
 
@@ -40,8 +56,17 @@ function getDBConnection(): PDO
 // === Отправка JSON-ответа ===
 function sendJSON(array $data, int $statusCode = 200): void
 {
-    http_response_code($statusCode);
-    header('Content-Type: application/json; charset=utf-8');
+    // Очищаем буфер вывода от любых неожиданных выводов (включая ошибки PHP)
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    
+    // Убеждаемся, что заголовки еще не отправлены
+    if (!headers_sent()) {
+        http_response_code($statusCode);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -68,8 +93,8 @@ function getPostData(): ?array
 
 // === CORS заголовки (важно для работы из Telegram WebApp через ngrok) ===
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 
 // Обработка preflight-запросов (OPTIONS)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
