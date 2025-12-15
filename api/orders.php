@@ -80,13 +80,27 @@ try {
         $deliveryType  = $data['delivery_type'] ?? 'pickup';
         $fullName      = trim($data['full_name'] ?? '');
         $phone         = trim($data['phone'] ?? '');
-        $address       = !empty($data['address']) ? trim($data['address']) : null;
-        $comment       = !empty($data['comment']) ? trim($data['comment']) : null;
         $totalAmount   = (float)($data['total_amount'] ?? 0);
         $paymentMethod = $data['payment_method'] ?? 'cash';
         $items         = $data['items'] ?? [];
+        
+        // Обработка адреса - важно правильно обработать для delivery
+        $address = null;
+        if (isset($data['address'])) {
+            $address = trim($data['address']);
+            // Если после trim() пустая строка, делаем null
+            if ($address === '') {
+                $address = null;
+            }
+        }
+        
+        // Комментарий опционален
+        $comment = null;
+        if (isset($data['comment']) && trim($data['comment']) !== '') {
+            $comment = trim($data['comment']);
+        }
 
-        // Валидация
+        // Валидация данных заказа
         if (empty($items) || !is_array($items)) {
             throw new Exception('Список товаров пуст или некорректен');
         }
@@ -99,15 +113,55 @@ try {
         if ($totalAmount <= 0) {
             throw new Exception('Сумма заказа должна быть больше нуля');
         }
+        if (!in_array($deliveryType, ['delivery', 'pickup'])) {
+            throw new Exception('Некорректный тип доставки: ' . $deliveryType);
+        }
+        
+        // Для доставки адрес обязателен и не может быть пустым
+        if ($deliveryType === 'delivery') {
+            if ($address === null || $address === '' || trim($address) === '') {
+                error_log('Order validation failed: delivery type requires address. Address value: ' . var_export($address, true));
+                throw new Exception('Для доставки необходимо указать адрес');
+            }
+        }
+        
+        // Логирование для отладки (в режиме разработки)
+        if (isset($_GET['debug'])) {
+            error_log('Order data before insert: ' . json_encode([
+                'user_id' => $userId,
+                'delivery_type' => $deliveryType,
+                'full_name' => $fullName,
+                'phone' => $phone,
+                'address' => $address,
+                'total_amount' => $totalAmount,
+                'items_count' => count($items)
+            ], JSON_UNESCAPED_UNICODE));
+        }
 
         // Создаём заказ
-        $stmt = $pdo->prepare("
-            INSERT INTO orders 
-            (user_id, order_number, delivery_type, full_name, phone, address, comment, total_amount, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([$userId, $orderNumber, $deliveryType, $fullName, $phone, $address, $comment, $totalAmount, $paymentMethod]);
-        $orderId = $pdo->lastInsertId();
+        // Важно: для delivery адрес должен быть не NULL
+        try {
+            $stmt = $pdo->prepare("
+                INSERT INTO orders 
+                (user_id, order_number, delivery_type, full_name, phone, address, comment, total_amount, payment_method)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([$userId, $orderNumber, $deliveryType, $fullName, $phone, $address, $comment, $totalAmount, $paymentMethod]);
+            $orderId = $pdo->lastInsertId();
+            
+            if (!$orderId) {
+                throw new Exception('Не удалось создать заказ. orderId не получен.');
+            }
+        } catch (PDOException $e) {
+            error_log('Order insert error: ' . $e->getMessage());
+            error_log('Order data: ' . json_encode([
+                'user_id' => $userId,
+                'delivery_type' => $deliveryType,
+                'address' => $address,
+                'full_name' => $fullName
+            ], JSON_UNESCAPED_UNICODE));
+            throw new Exception('Ошибка при создании заказа в БД: ' . $e->getMessage());
+        }
 
         // Подготовка вставки товаров
         $stmtItem = $pdo->prepare("

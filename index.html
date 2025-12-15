@@ -2574,11 +2574,16 @@ function validateCheckoutForm(isDelivery){
 // Получение данных заказа
 function getCheckoutData(isDelivery){
   if(isDelivery){
+    const address = qs('#delivery-address').value.trim();
+    // Проверяем, что адрес не пустой для доставки
+    if (!address) {
+      throw new Error('Для доставки необходимо указать адрес');
+    }
     return {
       type: 'delivery',
       name: qs('#delivery-name').value.trim(),
       phone: qs('#delivery-phone').value.trim(),
-      address: qs('#delivery-address').value.trim(),
+      address: address,
       comment: qs('#delivery-comment').value.trim()
     };
   } else {
@@ -4138,17 +4143,31 @@ function setupModals(){
       checkoutContinueBtn.addEventListener('click', () => {
         const isDelivery = !qs('#delivery-form').classList.contains('hidden');
         if(validateCheckoutForm(isDelivery)){
-          // Сохраняем данные заказа
-          const orderData = getCheckoutData(isDelivery);
-          window.__currentOrderData = orderData;
-          
-          // Закрываем модальное окно оформления и открываем окно оплаты
-          checkoutModal.classList.add('hidden');
-          const paymentModal = qs('#payment-modal');
-          const paymentTotal = qs('#payment-total');
-          if(paymentModal && paymentTotal){
-            paymentTotal.textContent = formatPrice(cart.getTotal());
-            paymentModal.classList.remove('hidden');
+          try {
+            // Сохраняем данные заказа
+            const orderData = getCheckoutData(isDelivery);
+            
+            // Дополнительная проверка адреса для доставки
+            if (isDelivery && (!orderData.address || orderData.address.trim() === '')) {
+              alert('Для доставки необходимо указать адрес');
+              qs('#delivery-address').focus();
+              qs('#delivery-address').classList.add('border-red-500');
+              return;
+            }
+            
+            window.__currentOrderData = orderData;
+            
+            // Закрываем модальное окно оформления и открываем окно оплаты
+            checkoutModal.classList.add('hidden');
+            const paymentModal = qs('#payment-modal');
+            const paymentTotal = qs('#payment-total');
+            if(paymentModal && paymentTotal){
+              paymentTotal.textContent = formatPrice(cart.getTotal());
+              paymentModal.classList.remove('hidden');
+            }
+          } catch (error) {
+            console.error('Error getting checkout data:', error);
+            alert(error.message || 'Ошибка при получении данных заказа');
           }
         } else {
           alert('Пожалуйста, заполните все обязательные поля');
@@ -4284,42 +4303,77 @@ function setupModals(){
               }
               
               // Сохраняем заказ, даже если userId null (API может создать временного пользователя)
+              // Подготавливаем данные для API
               const orderDataForAPI = {
                 delivery_type: orderData.type,
                 full_name: orderData.name,
                 phone: orderData.phone,
-                address: orderData.address || null,
-                comment: orderData.comment || null,
                 total_amount: cart.getTotal(),
                 payment_method: paymentMethod,
                 items: orderItems
               };
+              
+              // Адрес обязателен для доставки
+              if (orderData.type === 'delivery') {
+                const address = (orderData.address || '').trim();
+                if (!address) {
+                  throw new Error('Для доставки необходимо указать адрес');
+                }
+                orderDataForAPI.address = address;
+              } else {
+                // Для самовывоза адрес не обязателен, но можно указать
+                orderDataForAPI.address = (orderData.address || '').trim() || null;
+              }
+              
+              // Комментарий опционален
+              if (orderData.comment && orderData.comment.trim()) {
+                orderDataForAPI.comment = orderData.comment.trim();
+              }
               
               // Добавляем user_id только если он есть
               if (userId) {
                 orderDataForAPI.user_id = userId;
               }
               
-              console.log('Sending order data to API:', orderDataForAPI);
+              console.log('Sending order data to API:', JSON.stringify(orderDataForAPI, null, 2));
+              
+              // Проверяем, что все обязательные поля присутствуют перед отправкой
+              if (!orderDataForAPI.full_name || !orderDataForAPI.phone || !orderDataForAPI.items || orderDataForAPI.items.length === 0) {
+                throw new Error('Не все обязательные поля заполнены для создания заказа');
+              }
+              
+              // Дополнительная проверка для доставки
+              if (orderDataForAPI.delivery_type === 'delivery' && !orderDataForAPI.address) {
+                throw new Error('Для доставки необходимо указать адрес');
+              }
+              
               const orderResult = await window.API.orders.create(orderDataForAPI);
               console.log('Order saved to database:', orderResult);
               
               // Проверяем успешность операции
-              if (!orderResult || (!orderResult.order_number && !orderResult.data?.order_number)) {
+              if (!orderResult) {
+                throw new Error('Заказ не был создан. Сервер не вернул ответ.');
+              }
+              
+              // Проверяем наличие ошибки в ответе
+              if (orderResult.success === false && orderResult.error) {
+                throw new Error(orderResult.error);
+              }
+              
+              // Получаем номер заказа из ответа
+              const orderNumber = orderResult?.order_number || orderResult?.data?.order_number || orderResult?.order?.order_number;
+              if (!orderNumber) {
                 throw new Error('Заказ не был создан. Ответ сервера: ' + JSON.stringify(orderResult));
               }
               
-              // Показываем номер заказа пользователю, если он получен
-              const orderNumber = orderResult?.order_number || orderResult?.data?.order_number;
-              if (orderNumber) {
-                const orderNumberEl = qs('#order-number');
-                const orderNumberDisplay = qs('#order-number-display');
-                if (orderNumberEl) {
-                  orderNumberEl.textContent = orderNumber;
-                }
-                if (orderNumberDisplay) {
-                  orderNumberDisplay.classList.remove('hidden');
-                }
+              // Показываем номер заказа пользователю
+              const orderNumberEl = qs('#order-number');
+              const orderNumberDisplay = qs('#order-number-display');
+              if (orderNumberEl) {
+                orderNumberEl.textContent = orderNumber;
+              }
+              if (orderNumberDisplay) {
+                orderNumberDisplay.classList.remove('hidden');
               }
             } catch (error) {
               console.error('Failed to save order to database:', error);
