@@ -4344,6 +4344,9 @@ function setupModals(){
           showCartBadge();
           window.__currentOrderData = null;
           
+          // Убеждаемся, что пользователь может оформить новый заказ
+          // (ничего не блокируем - пользователь может снова добавить товары и оформить заказ)
+          
         } catch (error) {
           console.error('Error processing payment:', error);
           alert('Произошла ошибка при оформлении заказа. Попробуйте еще раз.');
