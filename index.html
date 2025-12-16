@@ -336,7 +336,7 @@
     <section id="orders" class="tab" aria-hidden="true" style="padding-top: 1rem; padding-bottom: 1rem;">
       <div class="max-w-md mx-auto px-4">
         <h2 class="text-xl font-bold text-amber-400 mb-6">Мои заказы</h2>
-        <div id="orders-list" class="space-y-4"></div>
+        <div id="orders-list" class="space-y-4" style="display: none;"></div>
         <div id="orders-empty" class="flex flex-col items-center justify-center min-h-[60vh]">
           <div class="text-center text-amber-300 text-xl mb-2">Заказов нет</div>
           <div class="text-center text-amber-300/60 text-sm">Вы еще не сделали заказ</div>
@@ -2620,12 +2620,13 @@ function validateCheckoutForm(isDelivery){
 // Получение данных заказа
 function getCheckoutData(isDelivery){
   if(isDelivery){
+    const address = qs('#delivery-address').value.trim();
     return {
       type: 'delivery',
       name: qs('#delivery-name').value.trim(),
       phone: qs('#delivery-phone').value.trim(),
-      address: qs('#delivery-address').value.trim(),
-      comment: qs('#delivery-comment').value.trim()
+      address: address || null, // Преобразуем пустую строку в null
+      comment: qs('#delivery-comment').value.trim() || null
     };
   } else {
     return {
@@ -2633,7 +2634,7 @@ function getCheckoutData(isDelivery){
       name: qs('#pickup-name').value.trim(),
       phone: qs('#pickup-phone').value.trim(),
       address: 'г Краснодар, ул Московская, д 25',
-      comment: qs('#pickup-comment').value.trim()
+      comment: qs('#pickup-comment').value.trim() || null
     };
   }
 }
@@ -3898,6 +3899,16 @@ async function loadUserOrders(){
   
   if(!ordersList || !ordersEmpty) return;
   
+  // Показываем индикатор загрузки
+  ordersList.innerHTML = '';
+  ordersList.style.display = 'none';
+  ordersEmpty.classList.remove('hidden');
+  ordersEmpty.style.display = 'flex';
+  ordersEmpty.innerHTML = `
+    <div class="text-center text-amber-300 text-xl mb-2">Загрузка...</div>
+    <div class="text-center text-amber-300/60 text-sm">Пожалуйста, подождите</div>
+  `;
+  
   try {
     // Получаем telegram_id пользователя
     const tg = safeTelegram();
@@ -3908,22 +3919,44 @@ async function loadUserOrders(){
     
     if(!telegramId){
       ordersList.innerHTML = '';
+      ordersList.style.display = 'none';
+      ordersEmpty.innerHTML = `
+        <div class="text-center text-amber-300 text-xl mb-2">Заказов нет</div>
+        <div class="text-center text-amber-300/60 text-sm">Вы еще не сделали заказ</div>
+      `;
       ordersEmpty.classList.remove('hidden');
+      ordersEmpty.style.display = 'flex';
       return;
     }
     
     // Загружаем заказы через API
     if(window.API && window.API.orders){
+      console.log('Loading orders for telegram_id:', telegramId);
       const orders = await window.API.orders.getByTelegramId(telegramId);
+      console.log('Orders loaded:', orders);
       renderOrders(orders);
     } else {
+      console.warn('API not available');
       ordersList.innerHTML = '';
+      ordersList.style.display = 'none';
+      ordersEmpty.innerHTML = `
+        <div class="text-center text-amber-300 text-xl mb-2">Заказов нет</div>
+        <div class="text-center text-amber-300/60 text-sm">Вы еще не сделали заказ</div>
+      `;
       ordersEmpty.classList.remove('hidden');
+      ordersEmpty.style.display = 'flex';
     }
   } catch(error){
     console.error('Failed to load orders:', error);
+    console.error('Error details:', error.message, error.stack);
     ordersList.innerHTML = '';
+    ordersList.style.display = 'none';
+    ordersEmpty.innerHTML = `
+      <div class="text-center text-amber-300 text-xl mb-2">Ошибка загрузки</div>
+      <div class="text-center text-amber-300/60 text-sm">Не удалось загрузить заказы</div>
+    `;
     ordersEmpty.classList.remove('hidden');
+    ordersEmpty.style.display = 'flex';
   }
 }
 
@@ -3935,11 +3968,15 @@ function renderOrders(orders){
   
   if(!orders || orders.length === 0){
     ordersList.innerHTML = '';
+    ordersList.style.display = 'none';
     ordersEmpty.classList.remove('hidden');
+    ordersEmpty.style.display = 'flex';
     return;
   }
   
   ordersEmpty.classList.add('hidden');
+  ordersEmpty.style.display = 'none';
+  ordersList.style.display = 'block';
   ordersList.innerHTML = '';
   
   const frag = document.createDocumentFragment();
@@ -4028,50 +4065,158 @@ async function loadUserReviews(){
       telegramId = tg.initDataUnsafe.user.id;
     }
     
+    // Показываем индикатор загрузки
+    if(publishedList) {
+      publishedList.innerHTML = '';
+      publishedList.style.display = 'none';
+    }
+    if(publishedEmpty) {
+      publishedEmpty.innerHTML = `
+        <div class="text-center text-amber-300 text-xl mb-2">Загрузка...</div>
+        <div class="text-center text-amber-300/60 text-sm">Пожалуйста, подождите</div>
+      `;
+      publishedEmpty.classList.remove('hidden');
+      publishedEmpty.style.display = 'flex';
+    }
+    if(pendingList) {
+      pendingList.innerHTML = '';
+      pendingList.style.display = 'none';
+    }
+    if(pendingEmpty) {
+      pendingEmpty.innerHTML = `
+        <div class="text-center text-amber-300 text-xl mb-2">Загрузка...</div>
+        <div class="text-center text-amber-300/60 text-sm">Пожалуйста, подождите</div>
+      `;
+      pendingEmpty.classList.remove('hidden');
+      pendingEmpty.style.display = 'flex';
+    }
+    
     if(!telegramId){
-      if(publishedList) publishedList.innerHTML = '';
-      if(publishedEmpty) publishedEmpty.classList.remove('hidden');
-      if(pendingList) pendingList.innerHTML = '';
-      if(pendingEmpty) pendingEmpty.classList.remove('hidden');
+      console.warn('No telegram_id found');
+      if(publishedList) publishedList.style.display = 'none';
+      if(publishedEmpty) {
+        publishedEmpty.innerHTML = `
+          <div class="text-center text-amber-300 text-xl mb-2">Тут пока пусто</div>
+          <div class="text-center text-amber-300/60 text-sm">Вы еще не оставили отзывы</div>
+        `;
+        publishedEmpty.classList.remove('hidden');
+        publishedEmpty.style.display = 'flex';
+      }
+      if(pendingList) pendingList.style.display = 'none';
+      if(pendingEmpty) {
+        pendingEmpty.innerHTML = `
+          <div class="text-center text-amber-300 text-xl mb-2">Тут пока пусто</div>
+          <div class="text-center text-amber-300/60 text-sm">Отзывы оставлять некому</div>
+        `;
+        pendingEmpty.classList.remove('hidden');
+        pendingEmpty.style.display = 'flex';
+      }
       return;
     }
     
     // Получаем user_id по telegram_id
     if(window.API && window.API.users){
+      console.log('Loading user for telegram_id:', telegramId);
       const user = await window.API.users.getByTelegramId(telegramId);
+      console.log('User loaded:', user);
       if(user && user.id){
         userId = user.id;
       }
     }
     
     if(!userId){
-      if(publishedList) publishedList.innerHTML = '';
-      if(publishedEmpty) publishedEmpty.classList.remove('hidden');
-      if(pendingList) pendingList.innerHTML = '';
-      if(pendingEmpty) pendingEmpty.classList.remove('hidden');
+      console.warn('No user_id found for telegram_id:', telegramId);
+      if(publishedList) publishedList.style.display = 'none';
+      if(publishedEmpty) {
+        publishedEmpty.innerHTML = `
+          <div class="text-center text-amber-300 text-xl mb-2">Тут пока пусто</div>
+          <div class="text-center text-amber-300/60 text-sm">Вы еще не оставили отзывы</div>
+        `;
+        publishedEmpty.classList.remove('hidden');
+        publishedEmpty.style.display = 'flex';
+      }
+      if(pendingList) pendingList.style.display = 'none';
+      if(pendingEmpty) {
+        pendingEmpty.innerHTML = `
+          <div class="text-center text-amber-300 text-xl mb-2">Тут пока пусто</div>
+          <div class="text-center text-amber-300/60 text-sm">Отзывы оставлять некому</div>
+        `;
+        pendingEmpty.classList.remove('hidden');
+        pendingEmpty.style.display = 'flex';
+      }
       return;
     }
     
     // Загружаем опубликованные отзывы
     if(window.API && window.API.reviews){
+      console.log('Loading reviews for user_id:', userId);
       const allReviews = await window.API.reviews.getByUser(userId);
+      console.log('Reviews loaded:', allReviews);
       const published = allReviews.filter(r => r.is_published);
       const pending = allReviews.filter(r => !r.is_published);
       
       renderPublishedReviews(published);
-      await loadPendingReviews(userId);
+      // Загружаем заказы для отзывов (используем telegram_id для надежности)
+      const tg = safeTelegram();
+      if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
+        await loadPendingReviews(userId);
+      } else {
+        await loadPendingReviews(userId);
+      }
     } else {
-      if(publishedList) publishedList.innerHTML = '';
-      if(publishedEmpty) publishedEmpty.classList.remove('hidden');
-      if(pendingList) pendingList.innerHTML = '';
-      if(pendingEmpty) pendingEmpty.classList.remove('hidden');
+      console.warn('Reviews API not available');
+      if(publishedList) {
+        publishedList.innerHTML = '';
+        publishedList.style.display = 'none';
+      }
+      if(publishedEmpty) {
+        publishedEmpty.innerHTML = `
+          <div class="text-center text-amber-300 text-xl mb-2">Тут пока пусто</div>
+          <div class="text-center text-amber-300/60 text-sm">Вы еще не оставили отзывы</div>
+        `;
+        publishedEmpty.classList.remove('hidden');
+        publishedEmpty.style.display = 'flex';
+      }
+      if(pendingList) {
+        pendingList.innerHTML = '';
+        pendingList.style.display = 'none';
+      }
+      if(pendingEmpty) {
+        pendingEmpty.innerHTML = `
+          <div class="text-center text-amber-300 text-xl mb-2">Тут пока пусто</div>
+          <div class="text-center text-amber-300/60 text-sm">Отзывы оставлять некому</div>
+        `;
+        pendingEmpty.classList.remove('hidden');
+        pendingEmpty.style.display = 'flex';
+      }
     }
   } catch(error){
     console.error('Failed to load reviews:', error);
-    if(publishedList) publishedList.innerHTML = '';
-    if(publishedEmpty) publishedEmpty.classList.remove('hidden');
-    if(pendingList) pendingList.innerHTML = '';
-    if(pendingEmpty) pendingEmpty.classList.remove('hidden');
+    console.error('Error details:', error.message, error.stack);
+    if(publishedList) {
+      publishedList.innerHTML = '';
+      publishedList.style.display = 'none';
+    }
+    if(publishedEmpty) {
+      publishedEmpty.innerHTML = `
+        <div class="text-center text-amber-300 text-xl mb-2">Ошибка загрузки</div>
+        <div class="text-center text-amber-300/60 text-sm">Не удалось загрузить отзывы</div>
+      `;
+      publishedEmpty.classList.remove('hidden');
+      publishedEmpty.style.display = 'flex';
+    }
+    if(pendingList) {
+      pendingList.innerHTML = '';
+      pendingList.style.display = 'none';
+    }
+    if(pendingEmpty) {
+      pendingEmpty.innerHTML = `
+        <div class="text-center text-amber-300 text-xl mb-2">Ошибка загрузки</div>
+        <div class="text-center text-amber-300/60 text-sm">Не удалось загрузить заказы</div>
+      `;
+      pendingEmpty.classList.remove('hidden');
+      pendingEmpty.style.display = 'flex';
+    }
   }
 }
 
@@ -4083,11 +4228,15 @@ function renderPublishedReviews(reviews){
   
   if(!reviews || reviews.length === 0){
     publishedList.innerHTML = '';
+    publishedList.style.display = 'none';
     publishedEmpty.classList.remove('hidden');
+    publishedEmpty.style.display = 'flex';
     return;
   }
   
   publishedEmpty.classList.add('hidden');
+  publishedEmpty.style.display = 'none';
+  publishedList.style.display = 'block';
   publishedList.innerHTML = '';
   
   const frag = document.createDocumentFragment();
@@ -4116,6 +4265,7 @@ function renderPublishedReviews(reviews){
       </div>
       ${review.comment ? `<p class="text-white text-sm">${review.comment}</p>` : ''}
       ${review.product_name ? `<p class="text-xs text-amber-300/60">Товар: ${review.product_name}</p>` : ''}
+      ${review.order_id ? `<p class="text-xs text-amber-300/60">Заказ: ${review.order_id}</p>` : ''}
     `;
     
     frag.appendChild(reviewCard);
@@ -4131,32 +4281,31 @@ async function loadPendingReviews(userId){
   if(!pendingList || !pendingEmpty) return;
   
   try {
-    // Получаем заказы пользователя по user_id или telegram_id
+    // Получаем заказы пользователя по telegram_id (более надежный способ)
     let orders = [];
     
     if(window.API && window.API.orders){
-      // Сначала пробуем получить по user_id
-      if(userId){
-        try {
+      const tg = safeTelegram();
+      if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
+        const telegramId = tg.initDataUnsafe.user.id;
+        console.log('Loading pending reviews orders for telegram_id:', telegramId);
+        orders = await window.API.orders.getByTelegramId(telegramId);
+        console.log('Orders loaded for pending reviews:', orders);
+      } else {
+        // Fallback: пробуем по user_id
+        if(userId){
+          console.log('Loading pending reviews orders for user_id:', userId);
           orders = await window.API.orders.getByUser(userId);
-        } catch(e){
-          console.warn('Failed to get orders by user_id, trying telegram_id:', e);
-        }
-      }
-      
-      // Если не получилось, пробуем по telegram_id
-      if(orders.length === 0){
-        const tg = safeTelegram();
-        if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
-          const telegramId = tg.initDataUnsafe.user.id;
-          orders = await window.API.orders.getByTelegramId(telegramId);
+          console.log('Orders loaded for pending reviews:', orders);
         }
       }
     }
     
     if(!orders || orders.length === 0){
       pendingList.innerHTML = '';
+      pendingList.style.display = 'none';
       pendingEmpty.classList.remove('hidden');
+      pendingEmpty.style.display = 'flex';
       return;
     }
     
@@ -4174,11 +4323,15 @@ async function loadPendingReviews(userId){
     
     if(ordersWithoutReviews.length === 0){
       pendingList.innerHTML = '';
+      pendingList.style.display = 'none';
       pendingEmpty.classList.remove('hidden');
+      pendingEmpty.style.display = 'flex';
       return;
     }
     
     pendingEmpty.classList.add('hidden');
+    pendingEmpty.style.display = 'none';
+    pendingList.style.display = 'block';
     pendingList.innerHTML = '';
     
     const frag = document.createDocumentFragment();
@@ -4228,8 +4381,15 @@ async function loadPendingReviews(userId){
     pendingList.appendChild(frag);
   } catch(error){
     console.error('Failed to load pending reviews:', error);
+    console.error('Error details:', error.message, error.stack);
     pendingList.innerHTML = '';
+    pendingList.style.display = 'none';
+    pendingEmpty.innerHTML = `
+      <div class="text-center text-amber-300 text-xl mb-2">Ошибка загрузки</div>
+      <div class="text-center text-amber-300/60 text-sm">Не удалось загрузить заказы</div>
+    `;
     pendingEmpty.classList.remove('hidden');
+    pendingEmpty.style.display = 'flex';
   }
 }
 
@@ -4467,14 +4627,7 @@ function setupReviewsTabs(){
       pendingContent.classList.remove('hidden');
       publishedContent.classList.add('hidden');
       // Загружаем заказы без отзывов при переключении на вкладку
-      const tg = safeTelegram();
-      if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
-        window.API.users.getByTelegramId(tg.initDataUnsafe.user.id).then(user => {
-          if(user && user.id){
-            loadPendingReviews(user.id);
-          }
-        });
-      }
+      loadUserReviews(); // Перезагружаем все отзывы, чтобы обновить обе вкладки
     });
   }
 }
@@ -4661,20 +4814,27 @@ function setupModals(){
                 address: orderData.address || null
               };
               
-              // Если есть данные Telegram, добавляем их
+              // Если есть данные Telegram, добавляем их (это важно для связи заказов с пользователем)
               if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
                 const telegramUser = tg.initDataUnsafe.user;
                 userData.telegram_id = telegramUser.id;
                 userData.first_name = telegramUser.first_name;
                 userData.last_name = telegramUser.last_name;
                 userData.username = telegramUser.username;
+                console.log('Adding Telegram data to user:', {
+                  telegram_id: telegramUser.id,
+                  first_name: telegramUser.first_name,
+                  last_name: telegramUser.last_name
+                });
               }
               
+              console.log('Creating/updating user with data:', userData);
               const user = await window.API.users.createOrUpdate(userData);
               userId = user.id;
-              console.log('User synced with database:', userId);
+              console.log('User synced with database:', userId, 'telegram_id:', user.telegram_id);
             } catch (error) {
               console.error('Failed to sync user with database:', error);
+              console.error('Error details:', error.message, error.stack);
               // Продолжаем работу даже если не удалось создать пользователя
               // В этом случае заказ все равно будет сохранен (если есть phone)
             }
@@ -4696,14 +4856,28 @@ function setupModals(){
                 configId = configDataStorage.productId;
                 configData = configDataStorage.config;
               }
+              // Для конфигурированных товаров product_id должен быть NULL
+              productId = null;
             } else if (idStr.startsWith('pc-')) {
               itemType = 'pc';
+              // Для PC товаров product_id должен быть NULL
+              productId = null;
             } else {
-              productId = parseInt(idStr);
+              // Для обычных товаров пытаемся получить product_id
+              // Но если товар не существует в БД, API установит product_id = NULL
+              const parsedId = parseInt(idStr);
+              // Проверяем, что это валидный числовой ID
+              if (!isNaN(parsedId) && parsedId > 0) {
+                productId = parsedId;
+              } else {
+                // Если ID невалидный, устанавливаем NULL
+                productId = null;
+                itemType = 'product'; // Оставляем тип как product, но без product_id
+              }
             }
             
             return {
-              product_id: productId,
+              product_id: productId, // Может быть NULL, если товар не существует в БД
               config_id: configId,
               item_type: itemType,
               item_name: item.name || ((item.cpu || '') + (item.cpu && item.gpu ? ' | ' : '') + (item.gpu || '')),
@@ -4748,6 +4922,14 @@ function setupModals(){
               if (userId) {
                 orderDataForAPI.user_id = userId;
               }
+              
+              // Логируем данные перед отправкой для отладки
+              console.log('Sending order data to API:', {
+                ...orderDataForAPI,
+                items_count: orderItems.length,
+                has_address: !!orderDataForAPI.address,
+                delivery_type: orderDataForAPI.delivery_type
+              });
               
               const orderResult = await window.API.orders.create(orderDataForAPI);
               console.log('Order saved to database:', orderResult);
@@ -4937,9 +5119,16 @@ function setupModals(){
             const bottomNav = qs('nav');
             if(bottomNav) bottomNav.classList.remove('hidden');
             
-            // Обновляем список отзывов
-            if(qs('#reviews').getAttribute('aria-hidden') === 'false'){
+            // Обновляем список отзывов, если вкладка отзывов открыта
+            const reviewsTab = qs('#reviews');
+            if(reviewsTab && reviewsTab.getAttribute('aria-hidden') === 'false'){
               loadUserReviews();
+            }
+            
+            // Также обновляем список заказов, если вкладка заказов открыта
+            const ordersTab = qs('#orders');
+            if(ordersTab && ordersTab.getAttribute('aria-hidden') === 'false'){
+              loadUserOrders();
             }
             
             alert('Отзыв успешно отправлен! Спасибо за ваше мнение.');

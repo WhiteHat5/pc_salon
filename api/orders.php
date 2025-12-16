@@ -60,14 +60,50 @@ try {
 
         } elseif ($telegramId !== null) {
             // Получение заказов пользователя по telegram_id
-            $stmt = $pdo->prepare("
-                SELECT o.* FROM orders o
-                INNER JOIN users u ON o.user_id = u.id
-                WHERE u.telegram_id = ?
-                ORDER BY o.created_at DESC
-            ");
+            // Сначала находим пользователя
+            $stmt = $pdo->prepare("SELECT id, phone FROM users WHERE telegram_id = ?");
             $stmt->execute([(int)$telegramId]);
-            $orders = $stmt->fetchAll();
+            $user = $stmt->fetch();
+            
+            $orders = [];
+            if ($user) {
+                // Находим заказы по user_id
+                $stmt = $pdo->prepare("
+                    SELECT * FROM orders 
+                    WHERE user_id = ? 
+                    ORDER BY created_at DESC
+                ");
+                $stmt->execute([$user['id']]);
+                $ordersByUserId = $stmt->fetchAll();
+                
+                // Также находим заказы по телефону (на случай, если заказ был создан без user_id)
+                if ($user['phone']) {
+                    $stmt = $pdo->prepare("
+                        SELECT * FROM orders 
+                        WHERE user_id IS NULL AND phone = ? 
+                        ORDER BY created_at DESC
+                    ");
+                    $stmt->execute([$user['phone']]);
+                    $ordersByPhone = $stmt->fetchAll();
+                    
+                    // Объединяем результаты, убирая дубликаты
+                    $orderIds = [];
+                    foreach ($ordersByUserId as $order) {
+                        $orders[] = $order;
+                        $orderIds[] = $order['id'];
+                    }
+                    foreach ($ordersByPhone as $order) {
+                        if (!in_array($order['id'], $orderIds)) {
+                            $orders[] = $order;
+                        }
+                    }
+                } else {
+                    $orders = $ordersByUserId;
+                }
+            } else {
+                // Если пользователь не найден, возвращаем пустой массив
+                $orders = [];
+            }
 
             // Для каждого заказа получаем товары
             foreach ($orders as &$order) {
@@ -140,6 +176,11 @@ try {
             throw new Exception('Обязательные поля не заполнены');
         }
 
+        // Для доставки адрес обязателен
+        if ($deliveryType === 'delivery' && (empty($address) || trim($address) === '')) {
+            throw new Exception('Адрес доставки обязателен для заказа с доставкой');
+        }
+
         // Создаём заказ
         $stmt = $pdo->prepare("
             INSERT INTO orders 
@@ -163,6 +204,19 @@ try {
             // Для типов 'config' и 'pc' product_id может быть NULL — это нормально
             if ($itemType !== 'product' && $productId !== null) {
                 $productId = null; // Принудительно обнуляем для кастомных и PC
+            }
+
+            // Проверяем существование товара в БД, если product_id указан
+            if ($productId !== null && $itemType === 'product') {
+                $checkStmt = $pdo->prepare("SELECT id FROM products WHERE id = ?");
+                $checkStmt->execute([$productId]);
+                $productExists = $checkStmt->fetch();
+                
+                // Если товар не существует в БД, устанавливаем product_id в NULL
+                if (!$productExists) {
+                    error_log("Product ID {$productId} not found in products table, setting to NULL");
+                    $productId = null;
+                }
             }
 
             $stmtItem->execute([
