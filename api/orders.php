@@ -61,20 +61,11 @@ try {
         } elseif ($telegramId !== null) {
             // Получение заказов пользователя по telegram_id
             // Сначала находим пользователя
-            error_log("Orders API: Searching for user with telegram_id = " . (int)$telegramId);
             $stmt = $pdo->prepare("SELECT id, phone FROM users WHERE telegram_id = ?");
             $stmt->execute([(int)$telegramId]);
             $user = $stmt->fetch();
             
-            if ($user) {
-                error_log("Orders API: User found - id=" . $user['id'] . ", phone=" . ($user['phone'] ?? 'NULL'));
-            } else {
-                error_log("Orders API: User NOT found with telegram_id = " . (int)$telegramId);
-            }
-            
             $orders = [];
-            $orderIds = [];
-            
             if ($user) {
                 // Находим заказы по user_id
                 $stmt = $pdo->prepare("
@@ -85,70 +76,34 @@ try {
                 $stmt->execute([$user['id']]);
                 $ordersByUserId = $stmt->fetchAll();
                 
-                // Добавляем заказы по user_id
-                foreach ($ordersByUserId as $order) {
-                    $orders[] = $order;
-                    $orderIds[] = $order['id'];
-                }
-                
                 // Также находим заказы по телефону (на случай, если заказ был создан без user_id)
                 if ($user['phone']) {
                     $stmt = $pdo->prepare("
                         SELECT * FROM orders 
-                        WHERE (user_id IS NULL OR user_id != ?) AND phone = ? 
+                        WHERE user_id IS NULL AND phone = ? 
                         ORDER BY created_at DESC
                     ");
-                    $stmt->execute([$user['id'], $user['phone']]);
+                    $stmt->execute([$user['phone']]);
                     $ordersByPhone = $stmt->fetchAll();
                     
-                    // Добавляем заказы по телефону, убирая дубликаты
+                    // Объединяем результаты, убирая дубликаты
+                    $orderIds = [];
+                    foreach ($ordersByUserId as $order) {
+                        $orders[] = $order;
+                        $orderIds[] = $order['id'];
+                    }
                     foreach ($ordersByPhone as $order) {
                         if (!in_array($order['id'], $orderIds)) {
                             $orders[] = $order;
-                            $orderIds[] = $order['id'];
                         }
                     }
+                } else {
+                    $orders = $ordersByUserId;
                 }
+            } else {
+                // Если пользователь не найден, возвращаем пустой массив
+                $orders = [];
             }
-            
-            // ДОПОЛНИТЕЛЬНЫЙ ПОИСК: Если пользователь не найден или заказов мало,
-            // ищем заказы напрямую по последним заказам с похожим телефоном
-            // Это fallback для случаев, когда пользователь не был создан в БД
-            if (empty($orders)) {
-                error_log("Orders API: No orders found by user_id/phone, trying fallback search");
-                // Получаем последние заказы и проверяем их телефоны
-                // (это поможет найти заказы, даже если пользователь не был создан)
-                $stmt = $pdo->prepare("
-                    SELECT * FROM orders 
-                    ORDER BY created_at DESC 
-                    LIMIT 50
-                ");
-                $stmt->execute();
-                $recentOrders = $stmt->fetchAll();
-                error_log("Orders API: Found " . count($recentOrders) . " recent orders for fallback search");
-                
-                // Если есть пользователь с телефоном, ищем по телефону
-                if ($user && $user['phone']) {
-                    $normalizedUserPhone = preg_replace('/[^0-9]/', '', $user['phone']);
-                    error_log("Orders API: Searching by normalized phone: " . $normalizedUserPhone);
-                    
-                    foreach ($recentOrders as $order) {
-                        // Нормализуем телефоны для сравнения (убираем пробелы, скобки и т.д.)
-                        $normalizedOrderPhone = preg_replace('/[^0-9]/', '', $order['phone']);
-                        
-                        if ($normalizedUserPhone && $normalizedOrderPhone && 
-                            $normalizedUserPhone === $normalizedOrderPhone) {
-                            if (!in_array($order['id'], $orderIds)) {
-                                $orders[] = $order;
-                                $orderIds[] = $order['id'];
-                                error_log("Orders API: Found matching order by phone: order_id=" . $order['id']);
-                            }
-                        }
-                    }
-                }
-            }
-            
-            error_log("Orders API: Total orders found: " . count($orders));
 
             // Для каждого заказа получаем товары
             foreach ($orders as &$order) {

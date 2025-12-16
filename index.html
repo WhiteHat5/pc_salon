@@ -4825,102 +4825,42 @@ function setupModals(){
           // Получаем или создаем пользователя
           let userId = null;
           const tg = safeTelegram();
-          let telegramId = null;
-          
-          // Сначала получаем telegram_id, если доступен
-          if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
-            telegramId = tg.initDataUnsafe.user.id;
-            console.log('Telegram ID available:', telegramId);
-          }
           
           if (window.API && window.API.users) {
             try {
-              // ГАРАНТИРУЕМ: Если есть telegram_id, он должен быть в данных пользователя
               let userData = {
                 phone: orderData.phone,
                 full_name: orderData.name,
                 address: orderData.address || null
               };
               
-              // КРИТИЧЕСКИ ВАЖНО: Если есть данные Telegram, добавляем их ПЕРВЫМИ
-              // Это гарантирует, что пользователь будет найден по telegram_id
-              if (telegramId) {
+              // Если есть данные Telegram, добавляем их (это важно для связи заказов с пользователем)
+              if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
                 const telegramUser = tg.initDataUnsafe.user;
-                userData.telegram_id = telegramId; // ОБЯЗАТЕЛЬНО добавляем telegram_id
-                userData.first_name = telegramUser.first_name || null;
-                userData.last_name = telegramUser.last_name || null;
-                userData.username = telegramUser.username || null;
+                userData.telegram_id = telegramUser.id;
+                userData.first_name = telegramUser.first_name;
+                userData.last_name = telegramUser.last_name;
+                userData.username = telegramUser.username;
                 console.log('Adding Telegram data to user:', {
-                  telegram_id: telegramId,
+                  telegram_id: telegramUser.id,
                   first_name: telegramUser.first_name,
-                  last_name: telegramUser.last_name,
-                  username: telegramUser.username
+                  last_name: telegramUser.last_name
                 });
               }
               
               console.log('Creating/updating user with data:', userData);
               const user = await window.API.users.createOrUpdate(userData);
-              
               if(user && user.id){
                 userId = user.id;
-                // ПРОВЕРЯЕМ: Убеждаемся, что telegram_id сохранен
-                if (telegramId && user.telegram_id != telegramId) {
-                  console.warn('WARNING: telegram_id mismatch! Expected:', telegramId, 'Got:', user.telegram_id);
-                  // Пытаемся обновить еще раз с явным telegram_id
-                  try {
-                    const updatedUser = await window.API.users.createOrUpdate({
-                      telegram_id: telegramId,
-                      phone: orderData.phone
-                    });
-                    if (updatedUser && updatedUser.telegram_id == telegramId) {
-                      console.log('Successfully updated user with correct telegram_id');
-                      userId = updatedUser.id;
-                    }
-                  } catch (updateError) {
-                    console.error('Failed to update user with telegram_id:', updateError);
-                  }
-                } else {
-                  console.log('✓ User synced with database:', userId, 'telegram_id:', user.telegram_id);
-                }
+                console.log('User synced with database:', userId, 'telegram_id:', user.telegram_id);
               } else {
                 console.warn('User created but no ID returned:', user);
-                // Если пользователь не создан, но есть telegram_id, пробуем еще раз
-                if (telegramId) {
-                  console.log('Retrying user creation with telegram_id...');
-                  try {
-                    const retryUser = await window.API.users.createOrUpdate({
-                      telegram_id: telegramId,
-                      phone: orderData.phone,
-                      full_name: orderData.name
-                    });
-                    if (retryUser && retryUser.id) {
-                      userId = retryUser.id;
-                      console.log('✓ User created on retry:', userId, 'telegram_id:', retryUser.telegram_id);
-                    }
-                  } catch (retryError) {
-                    console.error('Failed to create user on retry:', retryError);
-                  }
-                }
               }
             } catch (error) {
               console.error('Failed to sync user with database:', error);
               console.error('Error details:', error.message, error.stack);
-              // Если ошибка и есть telegram_id, пробуем создать пользователя только с telegram_id
-              if (telegramId && !userId) {
-                try {
-                  console.log('Attempting to create user with telegram_id only...');
-                  const fallbackUser = await window.API.users.createOrUpdate({
-                    telegram_id: telegramId,
-                    phone: orderData.phone || null
-                  });
-                  if (fallbackUser && fallbackUser.id) {
-                    userId = fallbackUser.id;
-                    console.log('✓ User created as fallback:', userId);
-                  }
-                } catch (fallbackError) {
-                  console.error('Fallback user creation failed:', fallbackError);
-                }
-              }
+              // Продолжаем работу даже если не удалось создать пользователя
+              // В этом случае заказ все равно будет сохранен (если есть phone)
             }
           }
           
@@ -4976,44 +4916,17 @@ function setupModals(){
           // Сохраняем заказ в БД
           if (window.API && window.API.orders) {
             try {
-              // Если userId не получен, пытаемся создать пользователя
-              // ПРИОРИТЕТ: Сначала с telegram_id, если он есть
-              if (!userId) {
-                if (telegramId) {
-                  // Пробуем создать пользователя с telegram_id
-                  try {
-                    console.log('Creating user with telegram_id as fallback...');
-                    const tempUser = await window.API.users.createOrUpdate({
-                      telegram_id: telegramId,
-                      phone: orderData.phone,
-                      full_name: orderData.name,
-                      address: orderData.address || null
-                    });
-                    if (tempUser && tempUser.id) {
-                      userId = tempUser.id;
-                      console.log('✓ User created with telegram_id:', userId);
-                    }
-                  } catch (userError) {
-                    console.warn('Could not create user with telegram_id:', userError);
-                  }
-                }
-                
-                // Если все еще нет userId, пробуем создать только по телефону
-                if (!userId && orderData.phone) {
-                  try {
-                    console.log('Creating user with phone only as last resort...');
-                    const tempUser = await window.API.users.createOrUpdate({
-                      phone: orderData.phone,
-                      full_name: orderData.name,
-                      address: orderData.address || null
-                    });
-                    if (tempUser && tempUser.id) {
-                      userId = tempUser.id;
-                      console.log('✓ User created with phone:', userId);
-                    }
-                  } catch (userError) {
-                    console.warn('Could not create user for order:', userError);
-                  }
+              // Если userId не получен, пытаемся создать пользователя по телефону
+              if (!userId && orderData.phone) {
+                try {
+                  const tempUser = await window.API.users.createOrUpdate({
+                    phone: orderData.phone,
+                    full_name: orderData.name,
+                    address: orderData.address || null
+                  });
+                  userId = tempUser.id;
+                } catch (userError) {
+                  console.warn('Could not create user for order:', userError);
                 }
               }
               
