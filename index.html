@@ -898,11 +898,11 @@
         <div id="delivery-form" class="space-y-4">
           <div>
             <label class="block text-amber-300 text-sm font-medium mb-2">ФИО <span class="text-red-400">*</span></label>
-            <input type="text" id="delivery-name" required class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="Иванов Иван Иванович" />
+            <input type="text" id="delivery-name" required maxlength="100" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="Иванов Иван Иванович" />
           </div>
           <div>
             <label class="block text-amber-300 text-sm font-medium mb-2">Телефон <span class="text-red-400">*</span></label>
-            <input type="tel" id="delivery-phone" required class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="+7 (999) 123-45-67" />
+            <input type="tel" id="delivery-phone" required maxlength="18" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="+7 (999) 123-45-67" />
           </div>
           <div>
             <label class="block text-amber-300 text-sm font-medium mb-2">Адрес доставки <span class="text-red-400">*</span></label>
@@ -922,11 +922,11 @@
           </div>
           <div>
             <label class="block text-amber-300 text-sm font-medium mb-2">ФИО <span class="text-red-400">*</span></label>
-            <input type="text" id="pickup-name" required class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="Иванов Иван Иванович" />
+            <input type="text" id="pickup-name" required maxlength="100" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="Иванов Иван Иванович" />
           </div>
           <div>
             <label class="block text-amber-300 text-sm font-medium mb-2">Телефон <span class="text-red-400">*</span></label>
-            <input type="tel" id="pickup-phone" required class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="+7 (999) 123-45-67" />
+            <input type="tel" id="pickup-phone" required maxlength="18" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="+7 (999) 123-45-67" />
           </div>
           <div>
             <label class="block text-amber-300 text-sm font-medium mb-2">Комментарий</label>
@@ -2584,6 +2584,71 @@ function switchCheckoutTab(tab){
   }
 }
 
+// Валидация ФИО: только буквы (русские и латинские), пробелы, дефисы, апострофы
+function validateFullName(name) {
+  if (!name || !name.trim()) {
+    return { valid: false, message: 'ФИО обязательно для заполнения' };
+  }
+  
+  const trimmedName = name.trim();
+  
+  // Проверка длины
+  if (trimmedName.length < 2) {
+    return { valid: false, message: 'ФИО должно содержать минимум 2 символа' };
+  }
+  
+  if (trimmedName.length > 100) {
+    return { valid: false, message: 'ФИО не должно превышать 100 символов' };
+  }
+  
+  // Проверка формата: только буквы (русские и латинские), пробелы, дефисы, апострофы
+  // Разрешаем кириллицу, латиницу, пробелы, дефисы и апострофы
+  const nameRegex = /^[а-яёА-ЯЁa-zA-Z\s\-']+$/u;
+  
+  if (!nameRegex.test(trimmedName)) {
+    return { valid: false, message: 'ФИО может содержать только буквы, пробелы, дефисы и апострофы' };
+  }
+  
+  // Проверка, что есть хотя бы одна буква (не только пробелы и дефисы)
+  if (!/[а-яёА-ЯЁa-zA-Z]/.test(trimmedName)) {
+    return { valid: false, message: 'ФИО должно содержать хотя бы одну букву' };
+  }
+  
+  return { valid: true };
+}
+
+// Валидация телефона: российский формат (+7 и 10 цифр)
+function validatePhone(phone) {
+  if (!phone || !phone.trim()) {
+    return { valid: false, message: 'Телефон обязателен для заполнения' };
+  }
+  
+  const trimmedPhone = phone.trim();
+  
+  // Удаляем все символы кроме цифр и плюса для проверки
+  const digitsOnly = trimmedPhone.replace(/\D/g, '');
+  
+  // Проверка формата: должен начинаться с +7 или 7 или 8, и содержать 11 цифр (с кодом страны) или 10 цифр (без кода)
+  // Принимаем форматы: +7XXXXXXXXXX, 7XXXXXXXXXX, 8XXXXXXXXXX, +7 (XXX) XXX-XX-XX и т.д.
+  if (digitsOnly.length === 11) {
+    // Если 11 цифр, первая должна быть 7 или 8
+    if (digitsOnly[0] === '7' || digitsOnly[0] === '8') {
+      // Проверяем, что остальные 10 цифр валидны (начинаются с 9 для мобильных или 3-6 для городских)
+      const mobilePart = digitsOnly.substring(1);
+      if (/^[3-9]\d{9}$/.test(mobilePart)) {
+        return { valid: true };
+      }
+    }
+  } else if (digitsOnly.length === 10) {
+    // Если 10 цифр, проверяем что они валидны
+    if (/^[3-9]\d{9}$/.test(digitsOnly)) {
+      return { valid: true };
+    }
+  }
+  
+  return { valid: false, message: 'Введите корректный номер телефона в формате +7 (999) 123-45-67' };
+}
+
 // Валидация формы оформления заказа
 function validateCheckoutForm(isDelivery){
   let isValid = true;
@@ -2594,22 +2659,50 @@ function validateCheckoutForm(isDelivery){
     const phone = qs('#delivery-phone');
     const address = qs('#delivery-address');
     
-    fields.push({el: name, required: true});
-    fields.push({el: phone, required: true});
+    fields.push({el: name, required: true, type: 'name'});
+    fields.push({el: phone, required: true, type: 'phone'});
     fields.push({el: address, required: true});
   } else {
     const name = qs('#pickup-name');
     const phone = qs('#pickup-phone');
     
-    fields.push({el: name, required: true});
-    fields.push({el: phone, required: true});
+    fields.push({el: name, required: true, type: 'name'});
+    fields.push({el: phone, required: true, type: 'phone'});
   }
   
   fields.forEach(field => {
-    if(field.required && !field.el.value.trim()){
+    const value = field.el.value.trim();
+    let fieldValid = true;
+    
+    // Проверка обязательности
+    if(field.required && !value){
       field.el.classList.add('border-red-500');
       isValid = false;
-    } else {
+      fieldValid = false;
+    }
+    
+    // Проверка формата для ФИО
+    if(fieldValid && field.type === 'name'){
+      const nameValidation = validateFullName(value);
+      if(!nameValidation.valid){
+        field.el.classList.add('border-red-500');
+        isValid = false;
+        fieldValid = false;
+      }
+    }
+    
+    // Проверка формата для телефона
+    if(fieldValid && field.type === 'phone'){
+      const phoneValidation = validatePhone(value);
+      if(!phoneValidation.valid){
+        field.el.classList.add('border-red-500');
+        isValid = false;
+        fieldValid = false;
+      }
+    }
+    
+    // Убираем класс ошибки, если поле валидно
+    if(fieldValid){
       field.el.classList.remove('border-red-500');
     }
   });
@@ -4772,7 +4865,155 @@ function setupModals(){
             paymentModal.classList.remove('hidden');
           }
         } else {
-          alert('Пожалуйста, заполните все обязательные поля');
+          alert('Пожалуйста, заполните все обязательные поля корректно');
+        }
+      });
+    }
+    
+    // Валидация в реальном времени для полей ФИО и телефона
+    const deliveryName = qs('#delivery-name');
+    const deliveryPhone = qs('#delivery-phone');
+    const pickupName = qs('#pickup-name');
+    const pickupPhone = qs('#pickup-phone');
+    
+    // Обработчик для поля ФИО доставки
+    if(deliveryName){
+      deliveryName.addEventListener('input', (e) => {
+        const value = e.target.value;
+        // Ограничиваем ввод только допустимыми символами
+        const filtered = value.replace(/[^а-яёА-ЯЁa-zA-Z\s\-']/gu, '');
+        if(value !== filtered){
+          e.target.value = filtered;
+        }
+        // Валидация при вводе
+        if(value.trim()){
+          const validation = validateFullName(value);
+          if(validation.valid){
+            e.target.classList.remove('border-red-500');
+          } else {
+            e.target.classList.add('border-red-500');
+          }
+        } else {
+          e.target.classList.remove('border-red-500');
+        }
+      });
+      
+      deliveryName.addEventListener('blur', (e) => {
+        const value = e.target.value.trim();
+        if(value){
+          const validation = validateFullName(value);
+          if(!validation.valid){
+            e.target.classList.add('border-red-500');
+          } else {
+            e.target.classList.remove('border-red-500');
+          }
+        }
+      });
+    }
+    
+    // Обработчик для поля телефона доставки
+    if(deliveryPhone){
+      deliveryPhone.addEventListener('input', (e) => {
+        let value = e.target.value;
+        // Разрешаем только цифры, пробелы, скобки, дефисы и плюс в начале
+        const filtered = value.replace(/[^\d\s()\-+]/g, '');
+        if(value !== filtered){
+          e.target.value = filtered;
+          value = filtered;
+        }
+        // Валидация при вводе (только если поле не пустое)
+        if(value.trim()){
+          const validation = validatePhone(value);
+          if(validation.valid){
+            e.target.classList.remove('border-red-500');
+          } else {
+            e.target.classList.add('border-red-500');
+          }
+        } else {
+          e.target.classList.remove('border-red-500');
+        }
+      });
+      
+      deliveryPhone.addEventListener('blur', (e) => {
+        const value = e.target.value.trim();
+        if(value){
+          const validation = validatePhone(value);
+          if(!validation.valid){
+            e.target.classList.add('border-red-500');
+          } else {
+            e.target.classList.remove('border-red-500');
+          }
+        }
+      });
+    }
+    
+    // Обработчик для поля ФИО самовывоза
+    if(pickupName){
+      pickupName.addEventListener('input', (e) => {
+        const value = e.target.value;
+        // Ограничиваем ввод только допустимыми символами
+        const filtered = value.replace(/[^а-яёА-ЯЁa-zA-Z\s\-']/gu, '');
+        if(value !== filtered){
+          e.target.value = filtered;
+        }
+        // Валидация при вводе
+        if(value.trim()){
+          const validation = validateFullName(value);
+          if(validation.valid){
+            e.target.classList.remove('border-red-500');
+          } else {
+            e.target.classList.add('border-red-500');
+          }
+        } else {
+          e.target.classList.remove('border-red-500');
+        }
+      });
+      
+      pickupName.addEventListener('blur', (e) => {
+        const value = e.target.value.trim();
+        if(value){
+          const validation = validateFullName(value);
+          if(!validation.valid){
+            e.target.classList.add('border-red-500');
+          } else {
+            e.target.classList.remove('border-red-500');
+          }
+        }
+      });
+    }
+    
+    // Обработчик для поля телефона самовывоза
+    if(pickupPhone){
+      pickupPhone.addEventListener('input', (e) => {
+        let value = e.target.value;
+        // Разрешаем только цифры, пробелы, скобки, дефисы и плюс в начале
+        const filtered = value.replace(/[^\d\s()\-+]/g, '');
+        if(value !== filtered){
+          e.target.value = filtered;
+          value = filtered;
+        }
+        // Валидация при вводе (только если поле не пустое)
+        if(value.trim()){
+          const validation = validatePhone(value);
+          if(validation.valid){
+            e.target.classList.remove('border-red-500');
+          } else {
+            e.target.classList.add('border-red-500');
+          }
+        } else {
+          e.target.classList.remove('border-red-500');
+        }
+      });
+      
+      pickupPhone.addEventListener('blur', (e) => {
+        const value = e.target.value.trim();
+        if(value){
+          const validation = validatePhone(value);
+          if(!validation.valid){
+            e.target.classList.add('border-red-500');
+          } else {
+            e.target.classList.remove('border-red-500');
+          }
         }
       });
     }
