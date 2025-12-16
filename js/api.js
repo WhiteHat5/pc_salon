@@ -120,7 +120,11 @@ const OrdersAPI = {
 
     async getByTelegramId(telegramId) {
         const result = await apiRequest(`orders.php?telegram_id=${telegramId}`);
-        return result.orders || result.data || [];
+        console.log('OrdersAPI.getByTelegramId result:', result);
+        // API возвращает { success: true, data: [...], orders: [...] }
+        const orders = result.orders || result.data || [];
+        console.log('OrdersAPI.getByTelegramId returning:', orders);
+        return Array.isArray(orders) ? orders : [];
     },
 
     async getById(orderId) {

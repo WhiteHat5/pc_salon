@@ -3934,7 +3934,12 @@ async function loadUserOrders(){
       console.log('Loading orders for telegram_id:', telegramId);
       const orders = await window.API.orders.getByTelegramId(telegramId);
       console.log('Orders loaded:', orders);
-      renderOrders(orders);
+      console.log('Orders type:', typeof orders, 'Is array:', Array.isArray(orders), 'Length:', orders?.length);
+      
+      // Убеждаемся, что orders - это массив
+      const ordersArray = Array.isArray(orders) ? orders : (orders?.orders || orders?.data || []);
+      console.log('Orders array:', ordersArray);
+      renderOrders(ordersArray);
     } else {
       console.warn('API not available');
       ordersList.innerHTML = '';
@@ -3964,16 +3969,31 @@ function renderOrders(orders){
   const ordersList = qs('#orders-list');
   const ordersEmpty = qs('#orders-empty');
   
-  if(!ordersList || !ordersEmpty) return;
+  if(!ordersList || !ordersEmpty) {
+    console.warn('renderOrders: ordersList or ordersEmpty not found');
+    return;
+  }
   
-  if(!orders || orders.length === 0){
+  console.log('renderOrders called with:', orders);
+  console.log('renderOrders: orders type:', typeof orders, 'Is array:', Array.isArray(orders), 'Length:', orders?.length);
+  
+  // Убеждаемся, что orders - это массив
+  const ordersArray = Array.isArray(orders) ? orders : [];
+  
+  if(!ordersArray || ordersArray.length === 0){
+    console.log('renderOrders: No orders to display');
     ordersList.innerHTML = '';
     ordersList.style.display = 'none';
+    ordersEmpty.innerHTML = `
+      <div class="text-center text-amber-300 text-xl mb-2">Заказов нет</div>
+      <div class="text-center text-amber-300/60 text-sm">Вы еще не сделали заказ</div>
+    `;
     ordersEmpty.classList.remove('hidden');
     ordersEmpty.style.display = 'flex';
     return;
   }
   
+  console.log('renderOrders: Rendering', ordersArray.length, 'orders');
   ordersEmpty.classList.add('hidden');
   ordersEmpty.style.display = 'none';
   ordersList.style.display = 'block';
@@ -3981,7 +4001,7 @@ function renderOrders(orders){
   
   const frag = document.createDocumentFragment();
   
-  orders.forEach(order => {
+  ordersArray.forEach(order => {
     const orderCard = document.createElement('div');
     orderCard.className = 'card-base rounded-xl p-4 space-y-3';
     
@@ -4830,8 +4850,12 @@ function setupModals(){
               
               console.log('Creating/updating user with data:', userData);
               const user = await window.API.users.createOrUpdate(userData);
-              userId = user.id;
-              console.log('User synced with database:', userId, 'telegram_id:', user.telegram_id);
+              if(user && user.id){
+                userId = user.id;
+                console.log('User synced with database:', userId, 'telegram_id:', user.telegram_id);
+              } else {
+                console.warn('User created but no ID returned:', user);
+              }
             } catch (error) {
               console.error('Failed to sync user with database:', error);
               console.error('Error details:', error.message, error.stack);
@@ -4921,6 +4945,11 @@ function setupModals(){
               // Добавляем user_id только если он есть
               if (userId) {
                 orderDataForAPI.user_id = userId;
+                console.log('Order will be created with user_id:', userId);
+              } else {
+                console.warn('Order will be created WITHOUT user_id. Phone:', orderDataForAPI.phone);
+                // Если userId нет, но есть telegram_id, убеждаемся, что телефон сохранен
+                // Это позволит найти заказ по телефону при поиске по telegram_id
               }
               
               // Логируем данные перед отправкой для отладки
@@ -4928,7 +4957,8 @@ function setupModals(){
                 ...orderDataForAPI,
                 items_count: orderItems.length,
                 has_address: !!orderDataForAPI.address,
-                delivery_type: orderDataForAPI.delivery_type
+                delivery_type: orderDataForAPI.delivery_type,
+                has_user_id: !!orderDataForAPI.user_id
               });
               
               const orderResult = await window.API.orders.create(orderDataForAPI);
