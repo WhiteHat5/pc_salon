@@ -39,14 +39,9 @@ async function apiRequest(endpoint, options = {}) {
         // Важно: твой config.php всегда возвращает JSON, даже при ошибке
         const data = await response.json();
 
-        // Проверяем, есть ли ошибка в ответе (даже если HTTP статус 200)
-        if (data.success === false && data.error) {
-            throw new Error(data.error);
-        }
-
         if (!response.ok) {
             // Сервер вернул ошибку (например, 400, 404, 500)
-            throw new Error(data.error || data.message || `HTTP ${response.status}`);
+            throw new Error(data.error || `HTTP ${response.status}`);
         }
 
         // Успешный ответ — возвращаем data (в твоём бэкенде это обычно { data: ..., success: true })
@@ -115,13 +110,7 @@ const OrdersAPI = {
             method: 'POST',
             body: orderData
         });
-        
-        // Проверяем успешность операции
-        if (!result.success && result.error) {
-            throw new Error(result.error);
-        }
-        
-        return result.order || result.data || result;
+        return result.order || result.data;
     },
 
     async getByUser(userId) {

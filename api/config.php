@@ -11,12 +11,6 @@ error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
-// Устанавливаем путь к логу ошибок (если не установлен)
-$errorLogPath = __DIR__ . '/api_errors.log';
-if (!ini_get('error_log')) {
-    ini_set('error_log', $errorLogPath);
-}
-
 // Включаем буферизацию вывода для перехвата любых неожиданных выводов
 if (!ob_get_level()) {
     ob_start();
