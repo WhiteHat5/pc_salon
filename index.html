@@ -314,7 +314,8 @@
 
         <!-- Контент опубликованных отзывов -->
         <div id="reviews-published-content" class="reviews-content">
-          <div class="flex flex-col items-center justify-center min-h-[60vh]">
+          <div id="reviews-published-list" class="space-y-4"></div>
+          <div id="reviews-published-empty" class="flex flex-col items-center justify-center min-h-[60vh]">
             <div class="text-center text-amber-300 text-xl mb-2">Тут пока пусто</div>
             <div class="text-center text-amber-300/60 text-sm">Вы еще не оставили отзывы</div>
           </div>
@@ -322,7 +323,8 @@
 
         <!-- Контент ожидающих отзыва -->
         <div id="reviews-pending-content" class="reviews-content hidden">
-          <div class="flex flex-col items-center justify-center min-h-[60vh]">
+          <div id="reviews-pending-list" class="space-y-4"></div>
+          <div id="reviews-pending-empty" class="flex flex-col items-center justify-center min-h-[60vh]">
             <div class="text-center text-amber-300 text-xl mb-2">Тут пока пусто</div>
             <div class="text-center text-amber-300/60 text-sm">Отзывы оставлять некому</div>
           </div>
@@ -334,7 +336,8 @@
     <section id="orders" class="tab" aria-hidden="true" style="padding-top: 1rem; padding-bottom: 1rem;">
       <div class="max-w-md mx-auto px-4">
         <h2 class="text-xl font-bold text-amber-400 mb-6">Мои заказы</h2>
-        <div class="flex flex-col items-center justify-center min-h-[60vh]">
+        <div id="orders-list" class="space-y-4"></div>
+        <div id="orders-empty" class="flex flex-col items-center justify-center min-h-[60vh]">
           <div class="text-center text-amber-300 text-xl mb-2">Заказов нет</div>
           <div class="text-center text-amber-300/60 text-sm">Вы еще не сделали заказ</div>
         </div>
@@ -1006,6 +1009,47 @@
       </div>
     </div>
 
+    <!-- Модальное окно создания отзыва -->
+    <div id="review-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center pb-24">
+      <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-amber-700 max-h-[85vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-xl font-bold text-amber-400">Оставить отзыв</h3>
+          <button id="close-review-modal" class="text-amber-400 hover:text-amber-300 transition">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+        <div class="space-y-4">
+          <div id="review-order-info" class="bg-slate-700 bg-opacity-50 rounded-lg p-4 border border-amber-700">
+            <p class="text-amber-300 text-sm font-medium mb-1">Заказ:</p>
+            <p id="review-order-number" class="text-white font-bold"></p>
+          </div>
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">Оценка <span class="text-red-400">*</span></label>
+            <div class="flex gap-2" id="review-rating">
+              <button class="review-star text-2xl text-slate-400 hover:text-amber-400 transition" data-rating="1">★</button>
+              <button class="review-star text-2xl text-slate-400 hover:text-amber-400 transition" data-rating="2">★</button>
+              <button class="review-star text-2xl text-slate-400 hover:text-amber-400 transition" data-rating="3">★</button>
+              <button class="review-star text-2xl text-slate-400 hover:text-amber-400 transition" data-rating="4">★</button>
+              <button class="review-star text-2xl text-slate-400 hover:text-amber-400 transition" data-rating="5">★</button>
+            </div>
+          </div>
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">Заголовок</label>
+            <input type="text" id="review-title" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm" placeholder="Краткий заголовок отзыва" />
+          </div>
+          <div>
+            <label class="block text-amber-300 text-sm font-medium mb-2">Комментарий</label>
+            <textarea id="review-comment" rows="4" class="w-full p-3 rounded-lg bg-slate-700 bg-opacity-70 border border-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-amber-400/50 text-white text-sm resize-none" placeholder="Опишите ваши впечатления от заказа"></textarea>
+          </div>
+          <div class="mt-6">
+            <button id="review-submit-btn" class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-3 rounded-xl font-bold transition transform hover:scale-105">
+              Отправить отзыв
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -1049,8 +1093,10 @@
 <!-- Настройка URL API (укажите публичный URL вашего API сервера) -->
 <!-- Для локальной разработки (localhost) настройка не требуется -->
 <!-- Для GitHub Pages раскомментируйте и укажите ваш публичный URL API: -->
+<!-- ВАЖНО: После запуска ngrok обновите этот URL на ваш новый ngrok URL -->
+<!-- Формат: https://ваш-ngrok-url.ngrok-free.dev/pc_salon/api -->
 <script>
-  window.API_URL = 'https://unsegmentary-jayna-unlucky.ngrok-free.dev/pc_salon/api'; // Замените на ваш публичный URL API
+  window.API_URL = 'https://unsegmentary-jayna-unlucky.ngrok-free.dev/pc_salon/api'; // Замените на ваш публичный URL API после запуска ngrok
 </script>
 <!-- API модуль (загружается перед основным скриптом) -->
 <script src="js/api.js"></script>
@@ -2919,6 +2965,12 @@ function openTab(tabId){
     updateProfileFavCount();
     updateTelegramProfile(); // Обновляем профиль при открытии вкладки
   }
+  if(tabId === 'orders') {
+    loadUserOrders(); // Загружаем заказы пользователя
+  }
+  if(tabId === 'reviews') {
+    loadUserReviews(); // Загружаем отзывы пользователя
+  }
   if(tabId === 'catalog') { 
     // Очищаем список товаров при возврате в каталог
     qs('#product-list').innerHTML = '';
@@ -3837,6 +3889,391 @@ function updateTelegramProfile(){
   }
 }
 
+// -----------------------------
+// Функции для работы с заказами
+// -----------------------------
+async function loadUserOrders(){
+  const ordersList = qs('#orders-list');
+  const ordersEmpty = qs('#orders-empty');
+  
+  if(!ordersList || !ordersEmpty) return;
+  
+  try {
+    // Получаем telegram_id пользователя
+    const tg = safeTelegram();
+    let telegramId = null;
+    if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
+      telegramId = tg.initDataUnsafe.user.id;
+    }
+    
+    if(!telegramId){
+      ordersList.innerHTML = '';
+      ordersEmpty.classList.remove('hidden');
+      return;
+    }
+    
+    // Загружаем заказы через API
+    if(window.API && window.API.orders){
+      const orders = await window.API.orders.getByTelegramId(telegramId);
+      renderOrders(orders);
+    } else {
+      ordersList.innerHTML = '';
+      ordersEmpty.classList.remove('hidden');
+    }
+  } catch(error){
+    console.error('Failed to load orders:', error);
+    ordersList.innerHTML = '';
+    ordersEmpty.classList.remove('hidden');
+  }
+}
+
+function renderOrders(orders){
+  const ordersList = qs('#orders-list');
+  const ordersEmpty = qs('#orders-empty');
+  
+  if(!ordersList || !ordersEmpty) return;
+  
+  if(!orders || orders.length === 0){
+    ordersList.innerHTML = '';
+    ordersEmpty.classList.remove('hidden');
+    return;
+  }
+  
+  ordersEmpty.classList.add('hidden');
+  ordersList.innerHTML = '';
+  
+  const frag = document.createDocumentFragment();
+  
+  orders.forEach(order => {
+    const orderCard = document.createElement('div');
+    orderCard.className = 'card-base rounded-xl p-4 space-y-3';
+    
+    // Форматируем дату
+    const orderDate = order.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }) : '';
+    
+    // Статус заказа
+    const statusMap = {
+      'new': { text: 'Новый', color: 'text-blue-400' },
+      'processing': { text: 'В обработке', color: 'text-yellow-400' },
+      'confirmed': { text: 'Подтвержден', color: 'text-green-400' },
+      'shipped': { text: 'Отправлен', color: 'text-purple-400' },
+      'delivered': { text: 'Доставлен', color: 'text-green-500' },
+      'cancelled': { text: 'Отменен', color: 'text-red-400' }
+    };
+    const status = statusMap[order.order_status] || { text: order.order_status || 'Новый', color: 'text-amber-400' };
+    
+    orderCard.innerHTML = `
+      <div class="flex justify-between items-start mb-2">
+        <div>
+          <h3 class="text-lg font-bold text-amber-300">${order.order_number || 'Заказ #' + order.id}</h3>
+          <p class="text-xs text-amber-300/60">${orderDate}</p>
+        </div>
+        <span class="text-sm font-medium ${status.color}">${status.text}</span>
+      </div>
+      <div class="space-y-2">
+        ${order.items && Array.isArray(order.items) && order.items.length > 0 ? order.items.map(item => `
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-white">${item.item_name || 'Товар'} × ${item.quantity || 1}</span>
+            <span class="text-amber-400 font-medium">${formatPrice(item.total_price || 0)}</span>
+          </div>
+        `).join('') : '<p class="text-sm text-amber-300/60">Товары загружаются...</p>'}
+      </div>
+      <div class="pt-2 border-t border-amber-800 flex justify-between items-center">
+        <span class="text-amber-300 font-medium">Итого:</span>
+        <span class="text-xl font-bold text-amber-400">${formatPrice(order.total_amount || 0)}</span>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button class="flex-1 bg-slate-700 hover:bg-slate-600 text-amber-300 py-2 rounded-lg font-semibold transition text-sm review-order-btn" data-order-id="${order.id}">
+          Оставить отзыв
+        </button>
+      </div>
+    `;
+    
+    // Обработчик кнопки отзыва
+    const reviewBtn = orderCard.querySelector('.review-order-btn');
+    if(reviewBtn){
+      reviewBtn.addEventListener('click', () => {
+        openReviewModal(order);
+      });
+    }
+    
+    frag.appendChild(orderCard);
+  });
+  
+  ordersList.appendChild(frag);
+}
+
+// -----------------------------
+// Функции для работы с отзывами
+// -----------------------------
+async function loadUserReviews(){
+  const publishedList = qs('#reviews-published-list');
+  const publishedEmpty = qs('#reviews-published-empty');
+  const pendingList = qs('#reviews-pending-list');
+  const pendingEmpty = qs('#reviews-pending-empty');
+  
+  try {
+    // Получаем telegram_id пользователя
+    const tg = safeTelegram();
+    let telegramId = null;
+    let userId = null;
+    
+    if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
+      telegramId = tg.initDataUnsafe.user.id;
+    }
+    
+    if(!telegramId){
+      if(publishedList) publishedList.innerHTML = '';
+      if(publishedEmpty) publishedEmpty.classList.remove('hidden');
+      if(pendingList) pendingList.innerHTML = '';
+      if(pendingEmpty) pendingEmpty.classList.remove('hidden');
+      return;
+    }
+    
+    // Получаем user_id по telegram_id
+    if(window.API && window.API.users){
+      const user = await window.API.users.getByTelegramId(telegramId);
+      if(user && user.id){
+        userId = user.id;
+      }
+    }
+    
+    if(!userId){
+      if(publishedList) publishedList.innerHTML = '';
+      if(publishedEmpty) publishedEmpty.classList.remove('hidden');
+      if(pendingList) pendingList.innerHTML = '';
+      if(pendingEmpty) pendingEmpty.classList.remove('hidden');
+      return;
+    }
+    
+    // Загружаем опубликованные отзывы
+    if(window.API && window.API.reviews){
+      const allReviews = await window.API.reviews.getByUser(userId);
+      const published = allReviews.filter(r => r.is_published);
+      const pending = allReviews.filter(r => !r.is_published);
+      
+      renderPublishedReviews(published);
+      await loadPendingReviews(userId);
+    } else {
+      if(publishedList) publishedList.innerHTML = '';
+      if(publishedEmpty) publishedEmpty.classList.remove('hidden');
+      if(pendingList) pendingList.innerHTML = '';
+      if(pendingEmpty) pendingEmpty.classList.remove('hidden');
+    }
+  } catch(error){
+    console.error('Failed to load reviews:', error);
+    if(publishedList) publishedList.innerHTML = '';
+    if(publishedEmpty) publishedEmpty.classList.remove('hidden');
+    if(pendingList) pendingList.innerHTML = '';
+    if(pendingEmpty) pendingEmpty.classList.remove('hidden');
+  }
+}
+
+function renderPublishedReviews(reviews){
+  const publishedList = qs('#reviews-published-list');
+  const publishedEmpty = qs('#reviews-published-empty');
+  
+  if(!publishedList || !publishedEmpty) return;
+  
+  if(!reviews || reviews.length === 0){
+    publishedList.innerHTML = '';
+    publishedEmpty.classList.remove('hidden');
+    return;
+  }
+  
+  publishedEmpty.classList.add('hidden');
+  publishedList.innerHTML = '';
+  
+  const frag = document.createDocumentFragment();
+  
+  reviews.forEach(review => {
+    const reviewCard = document.createElement('div');
+    reviewCard.className = 'card-base rounded-xl p-4 space-y-2';
+    
+    const reviewDate = review.created_at ? new Date(review.created_at).toLocaleDateString('ru-RU', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }) : '';
+    
+    reviewCard.innerHTML = `
+      <div class="flex justify-between items-start mb-2">
+        <div>
+          <h4 class="font-bold text-amber-300">${review.title || 'Без заголовка'}</h4>
+          <p class="text-xs text-amber-300/60">${reviewDate}</p>
+        </div>
+        <div class="flex gap-1">
+          ${Array.from({length: 5}, (_, i) => `
+            <span class="text-lg ${i < (review.rating || 0) ? 'text-amber-400' : 'text-slate-600'}">★</span>
+          `).join('')}
+        </div>
+      </div>
+      ${review.comment ? `<p class="text-white text-sm">${review.comment}</p>` : ''}
+      ${review.product_name ? `<p class="text-xs text-amber-300/60">Товар: ${review.product_name}</p>` : ''}
+    `;
+    
+    frag.appendChild(reviewCard);
+  });
+  
+  publishedList.appendChild(frag);
+}
+
+async function loadPendingReviews(userId){
+  const pendingList = qs('#reviews-pending-list');
+  const pendingEmpty = qs('#reviews-pending-empty');
+  
+  if(!pendingList || !pendingEmpty) return;
+  
+  try {
+    // Получаем заказы пользователя по user_id или telegram_id
+    let orders = [];
+    
+    if(window.API && window.API.orders){
+      // Сначала пробуем получить по user_id
+      if(userId){
+        try {
+          orders = await window.API.orders.getByUser(userId);
+        } catch(e){
+          console.warn('Failed to get orders by user_id, trying telegram_id:', e);
+        }
+      }
+      
+      // Если не получилось, пробуем по telegram_id
+      if(orders.length === 0){
+        const tg = safeTelegram();
+        if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
+          const telegramId = tg.initDataUnsafe.user.id;
+          orders = await window.API.orders.getByTelegramId(telegramId);
+        }
+      }
+    }
+    
+    if(!orders || orders.length === 0){
+      pendingList.innerHTML = '';
+      pendingEmpty.classList.remove('hidden');
+      return;
+    }
+    
+    // Получаем отзывы по заказам
+    const orderIds = orders.map(o => o.id);
+    const reviewsPromises = orderIds.map(orderId => 
+      window.API.reviews.getByOrder(orderId).catch(() => [])
+    );
+    const reviewsArrays = await Promise.all(reviewsPromises);
+    const existingReviews = reviewsArrays.flat();
+    const reviewedOrderIds = new Set(existingReviews.map(r => r.order_id).filter(Boolean));
+    
+    // Фильтруем заказы, на которые еще нет отзывов
+    const ordersWithoutReviews = orders.filter(order => !reviewedOrderIds.has(order.id));
+    
+    if(ordersWithoutReviews.length === 0){
+      pendingList.innerHTML = '';
+      pendingEmpty.classList.remove('hidden');
+      return;
+    }
+    
+    pendingEmpty.classList.add('hidden');
+    pendingList.innerHTML = '';
+    
+    const frag = document.createDocumentFragment();
+    
+    ordersWithoutReviews.forEach(order => {
+      const orderCard = document.createElement('div');
+      orderCard.className = 'card-base rounded-xl p-4 space-y-3';
+      
+      const orderDate = order.created_at ? new Date(order.created_at).toLocaleDateString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      }) : '';
+      
+      orderCard.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+          <div>
+            <h4 class="font-bold text-amber-300">${order.order_number || 'Заказ #' + order.id}</h4>
+            <p class="text-xs text-amber-300/60">${orderDate}</p>
+          </div>
+        </div>
+        <div class="space-y-1">
+          ${order.items && Array.isArray(order.items) && order.items.length > 0 ? order.items.slice(0, 3).map(item => `
+            <p class="text-sm text-white">${item.item_name || 'Товар'} × ${item.quantity || 1}</p>
+          `).join('') : '<p class="text-sm text-amber-300/60">Товары загружаются...</p>'}
+          ${order.items && Array.isArray(order.items) && order.items.length > 3 ? `<p class="text-xs text-amber-300/60">и еще ${order.items.length - 3} товаров</p>` : ''}
+        </div>
+        <div class="pt-2 border-t border-amber-800 flex justify-between items-center">
+          <span class="text-amber-300 font-medium">Сумма:</span>
+          <span class="text-lg font-bold text-amber-400">${formatPrice(order.total_amount || 0)}</span>
+        </div>
+        <button class="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-slate-900 py-2 rounded-lg font-bold transition transform hover:scale-105 mt-3 review-order-btn" data-order-id="${order.id}">
+          Оставить отзыв
+        </button>
+      `;
+      
+      const reviewBtn = orderCard.querySelector('.review-order-btn');
+      if(reviewBtn){
+        reviewBtn.addEventListener('click', () => {
+          openReviewModal(order);
+        });
+      }
+      
+      frag.appendChild(orderCard);
+    });
+    
+    pendingList.appendChild(frag);
+  } catch(error){
+    console.error('Failed to load pending reviews:', error);
+    pendingList.innerHTML = '';
+    pendingEmpty.classList.remove('hidden');
+  }
+}
+
+let currentReviewOrder = null;
+
+function openReviewModal(order){
+  currentReviewOrder = order;
+  const modal = qs('#review-modal');
+  const orderNumber = qs('#review-order-number');
+  const ratingStars = qsa('#review-rating .review-star');
+  const titleInput = qs('#review-title');
+  const commentInput = qs('#review-comment');
+  
+  if(!modal) return;
+  
+  // Сбрасываем форму
+  if(orderNumber) orderNumber.textContent = order.order_number || 'Заказ #' + order.id;
+  if(titleInput) titleInput.value = '';
+  if(commentInput) commentInput.value = '';
+  
+  // Сбрасываем рейтинг
+  let selectedRating = 0;
+  ratingStars.forEach((star, index) => {
+    star.classList.remove('text-amber-400');
+    star.classList.add('text-slate-400');
+    star.onclick = () => {
+      selectedRating = index + 1;
+      ratingStars.forEach((s, i) => {
+        if(i < selectedRating){
+          s.classList.remove('text-slate-400');
+          s.classList.add('text-amber-400');
+        } else {
+          s.classList.remove('text-amber-400');
+          s.classList.add('text-slate-400');
+        }
+      });
+    };
+  });
+  
+  const bottomNav = qs('nav');
+  if(bottomNav) bottomNav.classList.add('hidden');
+  modal.classList.remove('hidden');
+}
+
 async function init(){
   // Загружаем категории из API (не блокируем инициализацию при ошибке)
   try {
@@ -4012,6 +4449,8 @@ function setupReviewsTabs(){
       pendingTab.classList.add('border-transparent');
       publishedContent.classList.remove('hidden');
       pendingContent.classList.add('hidden');
+      // Загружаем опубликованные отзывы при переключении на вкладку
+      loadUserReviews();
     });
 
     pendingTab.addEventListener('click', () => {
@@ -4027,6 +4466,15 @@ function setupReviewsTabs(){
       publishedTab.classList.add('border-transparent');
       pendingContent.classList.remove('hidden');
       publishedContent.classList.add('hidden');
+      // Загружаем заказы без отзывов при переключении на вкладку
+      const tg = safeTelegram();
+      if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
+        window.API.users.getByTelegramId(tg.initDataUnsafe.user.id).then(user => {
+          if(user && user.id){
+            loadPendingReviews(user.id);
+          }
+        });
+      }
     });
   }
 }
@@ -4383,6 +4831,140 @@ function setupModals(){
       if(e.target === orderSuccessModal){
         orderSuccessModal.classList.add('hidden');
         openTab('catalog');
+      }
+    });
+  }
+
+  // Модальное окно создания отзыва
+  const reviewModal = qs('#review-modal');
+  const closeReviewModal = qs('#close-review-modal');
+  const reviewSubmitBtn = qs('#review-submit-btn');
+
+  if(reviewModal){
+    if(closeReviewModal){
+      closeReviewModal.addEventListener('click', () => {
+        reviewModal.classList.add('hidden');
+        currentReviewOrder = null;
+        const bottomNav = qs('nav');
+        if(bottomNav) bottomNav.classList.remove('hidden');
+      });
+    }
+    
+    if(reviewSubmitBtn){
+      reviewSubmitBtn.addEventListener('click', async () => {
+        if(!currentReviewOrder) return;
+        
+        const titleInput = qs('#review-title');
+        const commentInput = qs('#review-comment');
+        const ratingStars = qsa('#review-rating .review-star');
+        
+        // Получаем выбранный рейтинг
+        let selectedRating = 0;
+        ratingStars.forEach((star, index) => {
+          if(star.classList.contains('text-amber-400')){
+            selectedRating = index + 1;
+          }
+        });
+        
+        if(selectedRating === 0){
+          alert('Пожалуйста, выберите оценку');
+          return;
+        }
+        
+        try {
+          // Получаем telegram_id пользователя
+          const tg = safeTelegram();
+          let telegramId = null;
+          let userId = null;
+          
+          if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
+            telegramId = tg.initDataUnsafe.user.id;
+          }
+          
+          if(!telegramId){
+            alert('Не удалось определить пользователя');
+            return;
+          }
+          
+          // Получаем user_id по telegram_id
+          if(window.API && window.API.users){
+            const user = await window.API.users.getByTelegramId(telegramId);
+            if(user && user.id){
+              userId = user.id;
+            } else {
+              // Создаем пользователя, если его нет
+              const newUser = await window.API.users.createOrUpdate({
+                telegram_id: telegramId,
+                first_name: tg.initDataUnsafe.user.first_name,
+                last_name: tg.initDataUnsafe.user.last_name,
+                username: tg.initDataUnsafe.user.username
+              });
+              userId = newUser.id;
+            }
+          }
+          
+          if(!userId){
+            alert('Не удалось получить ID пользователя');
+            return;
+          }
+          
+          // Определяем product_id из заказа (берем первый товар)
+          let productId = null;
+          if(currentReviewOrder.items && currentReviewOrder.items.length > 0){
+            const firstItem = currentReviewOrder.items[0];
+            if(firstItem.product_id){
+              productId = firstItem.product_id;
+            }
+          }
+          
+          // Создаем отзыв
+          if(window.API && window.API.reviews){
+            reviewSubmitBtn.disabled = true;
+            reviewSubmitBtn.textContent = 'Отправка...';
+            
+            await window.API.reviews.create({
+              user_id: userId,
+              order_id: currentReviewOrder.id,
+              product_id: productId,
+              rating: selectedRating,
+              title: titleInput ? titleInput.value.trim() : null,
+              comment: commentInput ? commentInput.value.trim() : null
+            });
+            
+            // Закрываем модальное окно
+            reviewModal.classList.add('hidden');
+            currentReviewOrder = null;
+            const bottomNav = qs('nav');
+            if(bottomNav) bottomNav.classList.remove('hidden');
+            
+            // Обновляем список отзывов
+            if(qs('#reviews').getAttribute('aria-hidden') === 'false'){
+              loadUserReviews();
+            }
+            
+            alert('Отзыв успешно отправлен! Спасибо за ваше мнение.');
+          } else {
+            alert('API недоступен');
+          }
+        } catch(error){
+          console.error('Failed to create review:', error);
+          alert('Произошла ошибка при отправке отзыва. Попробуйте еще раз.');
+        } finally {
+          if(reviewSubmitBtn){
+            reviewSubmitBtn.disabled = false;
+            reviewSubmitBtn.textContent = 'Отправить отзыв';
+          }
+        }
+      });
+    }
+    
+    // Закрытие по клику на фон
+    reviewModal.addEventListener('click', (e) => {
+      if(e.target === reviewModal){
+        reviewModal.classList.add('hidden');
+        currentReviewOrder = null;
+        const bottomNav = qs('nav');
+        if(bottomNav) bottomNav.classList.remove('hidden');
       }
     });
   }

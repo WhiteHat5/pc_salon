@@ -13,12 +13,30 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $userId = $_GET['user_id'] ?? null;
+        $telegramId = $_GET['telegram_id'] ?? null;
         $orderId = $_GET['id'] ?? null;
 
         if ($orderId !== null) {
             // Получение одного заказа с товарами
             $stmt = $pdo->prepare("
-                SELECT * FROM orders WHERE id = ?
+                SELECT o.*, 
+                       GROUP_CONCAT(
+                           JSON_OBJECT(
+                               'id', oi.id,
+                               'product_id', oi.product_id,
+                               'item_type', oi.item_type,
+                               'item_name', oi.item_name,
+                               'item_specs', oi.item_specs,
+                               'quantity', oi.quantity,
+                               'unit_price', oi.unit_price,
+                               'total_price', oi.total_price,
+                               'config_data', oi.config_data
+                           ) SEPARATOR '|||'
+                       ) as items_json
+                FROM orders o
+                LEFT JOIN order_items oi ON o.id = oi.order_id
+                WHERE o.id = ?
+                GROUP BY o.id
             ");
             $stmt->execute([(int)$orderId]);
             $order = $stmt->fetch();
@@ -27,7 +45,7 @@ try {
                 sendError('Заказ не найден', 404);
             }
 
-            // Получаем товары заказа
+            // Получаем товары заказа отдельным запросом
             $stmt = $pdo->prepare("
                 SELECT * FROM order_items WHERE order_id = ?
             ");
@@ -40,13 +58,50 @@ try {
                 'order' => $order // Для обратной совместимости
             ]);
 
+        } elseif ($telegramId !== null) {
+            // Получение заказов пользователя по telegram_id
+            $stmt = $pdo->prepare("
+                SELECT o.* FROM orders o
+                INNER JOIN users u ON o.user_id = u.id
+                WHERE u.telegram_id = ?
+                ORDER BY o.created_at DESC
+            ");
+            $stmt->execute([(int)$telegramId]);
+            $orders = $stmt->fetchAll();
+
+            // Для каждого заказа получаем товары
+            foreach ($orders as &$order) {
+                $stmt = $pdo->prepare("
+                    SELECT * FROM order_items WHERE order_id = ?
+                ");
+                $stmt->execute([$order['id']]);
+                $order['items'] = $stmt->fetchAll();
+            }
+            unset($order);
+
+            sendJSON([
+                'success' => true,
+                'data' => $orders,
+                'orders' => $orders // Для обратной совместимости
+            ]);
+
         } elseif ($userId !== null) {
-            // Получение заказов пользователя
+            // Получение заказов пользователя по user_id
             $stmt = $pdo->prepare("
                 SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC
             ");
             $stmt->execute([(int)$userId]);
             $orders = $stmt->fetchAll();
+
+            // Для каждого заказа получаем товары
+            foreach ($orders as &$order) {
+                $stmt = $pdo->prepare("
+                    SELECT * FROM order_items WHERE order_id = ?
+                ");
+                $stmt->execute([$order['id']]);
+                $order['items'] = $stmt->fetchAll();
+            }
+            unset($order);
 
             sendJSON([
                 'success' => true,
@@ -55,7 +110,7 @@ try {
             ]);
 
         } else {
-            sendError('Необходим параметр user_id или id', 400);
+            sendError('Необходим параметр user_id, telegram_id или id', 400);
         }
 
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {

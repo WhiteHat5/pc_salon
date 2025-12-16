@@ -118,9 +118,39 @@ const OrdersAPI = {
         return result.orders || result.data || [];
     },
 
+    async getByTelegramId(telegramId) {
+        const result = await apiRequest(`orders.php?telegram_id=${telegramId}`);
+        return result.orders || result.data || [];
+    },
+
     async getById(orderId) {
         const result = await apiRequest(`orders.php?id=${orderId}`);
         return result.order || result.data || null;
+    }
+};
+
+const ReviewsAPI = {
+    async create(reviewData) {
+        const result = await apiRequest('reviews.php', {
+            method: 'POST',
+            body: reviewData
+        });
+        return result.data || result.review;
+    },
+
+    async getByUser(userId) {
+        const result = await apiRequest(`reviews.php?user_id=${userId}`);
+        return result.reviews || result.data || [];
+    },
+
+    async getByOrder(orderId) {
+        const result = await apiRequest(`reviews.php?order_id=${orderId}`);
+        return result.reviews || result.data || [];
+    },
+
+    async getPublished() {
+        const result = await apiRequest('reviews.php?published=true');
+        return result.reviews || result.data || [];
     }
 };
 
@@ -132,6 +162,7 @@ window.API = {
     products: ProductsAPI,
     users: UsersAPI,
     orders: OrdersAPI,
+    reviews: ReviewsAPI,
     baseUrl: API_BASE_URL // Для отладки
 };
 
