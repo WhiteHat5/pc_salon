@@ -4118,27 +4118,41 @@ function renderOrders(orders){
     };
     const status = statusMap[order.order_status] || { text: order.order_status || 'Новый', color: 'text-amber-400' };
     
+    // Определяем тип доставки
+    const deliveryTypeText = order.delivery_type === 'delivery' ? 'Доставка' : 'Самовывоз';
+    const deliveryIcon = order.delivery_type === 'delivery' ? 'fa-truck' : 'fa-store';
+    
+    // Получаем уникальный номер заказа
+    const orderNumber = order.order_number || ('Заказ #' + order.id);
+    
     orderCard.innerHTML = `
-      <div class="flex justify-between items-start mb-2">
-        <div>
-          <h3 class="text-lg font-bold text-amber-300">${order.order_number || 'Заказ #' + order.id}</h3>
-          <p class="text-xs text-amber-300/60">${orderDate}</p>
+      <div class="flex justify-between items-start mb-3">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <i class="fas fa-hashtag text-amber-400 text-sm"></i>
+            <h3 class="text-xl font-bold text-amber-300">${orderNumber}</h3>
+          </div>
+          <p class="text-xs text-amber-300/60 mb-1">${orderDate}</p>
+          <div class="flex items-center gap-2 text-xs text-amber-300/70">
+            <i class="fas ${deliveryIcon}"></i>
+            <span>${deliveryTypeText}</span>
+          </div>
         </div>
-        <span class="text-sm font-medium ${status.color}">${status.text}</span>
+        <span class="text-sm font-medium px-2 py-1 rounded ${status.color} bg-opacity-20">${status.text}</span>
       </div>
-      <div class="space-y-2">
+      <div class="space-y-2 mb-3">
         ${order.items && Array.isArray(order.items) && order.items.length > 0 ? order.items.map(item => `
-          <div class="flex justify-between items-center text-sm">
+          <div class="flex justify-between items-center text-sm bg-slate-800/50 rounded-lg px-3 py-2">
             <span class="text-white">${item.item_name || 'Товар'} × ${item.quantity || 1}</span>
             <span class="text-amber-400 font-medium">${formatPrice(item.total_price || 0)}</span>
           </div>
         `).join('') : '<p class="text-sm text-amber-300/60">Товары загружаются...</p>'}
       </div>
-      <div class="pt-2 border-t border-amber-800 flex justify-between items-center">
-        <span class="text-amber-300 font-medium">Итого:</span>
+      <div class="pt-3 border-t border-amber-800 flex justify-between items-center mb-3">
+        <span class="text-amber-300 font-semibold">Итого:</span>
         <span class="text-xl font-bold text-amber-400">${formatPrice(order.total_amount || 0)}</span>
       </div>
-      <div class="flex gap-2 mt-3">
+      <div class="flex gap-2">
         <button class="flex-1 bg-slate-700 hover:bg-slate-600 text-amber-300 py-2 rounded-lg font-semibold transition text-sm review-order-btn" data-order-id="${order.id}">
           Оставить отзыв
         </button>
