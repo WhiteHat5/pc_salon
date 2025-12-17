@@ -20,10 +20,9 @@ if (!ob_get_level()) {
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'pc_salon');
 define('DB_USER', 'root');
-define('DB_PASS', '');               // Если у тебя есть пароль — укажи его здесь!
+define('DB_PASS', '');
 define('DB_CHARSET', 'utf8mb4');
 
-// === Подключение к БД (singleton) ===
 function getDBConnection(): PDO
 {
     static $pdo = null;

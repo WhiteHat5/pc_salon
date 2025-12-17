@@ -22,20 +22,29 @@ try {
         $params = [];
 
         if ($userId !== null) {
+            if (!is_numeric($userId) || (int)$userId <= 0) {
+                sendError('Некорректный user_id', 400);
+            }
             $where[] = "r.user_id = ?";
             $params[] = (int)$userId;
         }
         if ($productId !== null) {
+            if (!is_numeric($productId) || (int)$productId <= 0) {
+                sendError('Некорректный product_id', 400);
+            }
             $where[] = "r.product_id = ?";
             $params[] = (int)$productId;
         }
         if ($orderId !== null) {
+            if (!is_numeric($orderId) || (int)$orderId <= 0) {
+                sendError('Некорректный order_id', 400);
+            }
             $where[] = "r.order_id = ?";
             $params[] = (int)$orderId;
         }
         if ($published !== null) {
             $where[] = "r.is_published = ?";
-            $params[] = $published === 'true' ? 1 : 0;
+            $params[] = ($published === 'true' || $published === '1' || $published === 1) ? 1 : 0;
         }
 
         $sql = "
@@ -82,19 +91,61 @@ try {
             sendError('Некорректный JSON', 400);
         }
 
-        $userId = $data['user_id'] ?? null;
-        $orderId = $data['order_id'] ?? null;
-        $productId = $data['product_id'] ?? null;
-        $rating = $data['rating'] ?? null;
-        $title = $data['title'] ?? null;
-        $comment = $data['comment'] ?? null;
+        $userId = isset($data['user_id']) ? (int)$data['user_id'] : null;
+        $orderId = isset($data['order_id']) && $data['order_id'] !== '' && $data['order_id'] !== null ? (int)$data['order_id'] : null;
+        $productId = isset($data['product_id']) && $data['product_id'] !== '' && $data['product_id'] !== null ? (int)$data['product_id'] : null;
+        $rating = isset($data['rating']) ? (int)$data['rating'] : null;
+        $title = isset($data['title']) ? trim($data['title']) : null;
+        $title = $title === '' ? null : $title;
+        $comment = isset($data['comment']) ? trim($data['comment']) : null;
+        $comment = $comment === '' ? null : $comment;
 
-        if (!$userId || !$rating) {
-            sendError('user_id и rating обязательны', 400);
+        // Валидация обязательных полей
+        if (!$userId || $userId <= 0) {
+            sendError('user_id обязателен и должен быть положительным числом', 400);
+        }
+        
+        if ($rating === null) {
+            sendError('rating обязателен', 400);
         }
 
         if ($rating < 1 || $rating > 5) {
             sendError('Рейтинг должен быть от 1 до 5', 400);
+        }
+        
+        // Проверяем существование пользователя
+        $checkStmt = $pdo->prepare("SELECT id FROM users WHERE id = ?");
+        $checkStmt->execute([$userId]);
+        if (!$checkStmt->fetch()) {
+            sendError('Пользователь не найден', 404);
+        }
+        
+        // Если указан order_id, проверяем существование заказа
+        if ($orderId !== null) {
+            $checkStmt = $pdo->prepare("SELECT id FROM orders WHERE id = ?");
+            $checkStmt->execute([$orderId]);
+            if (!$checkStmt->fetch()) {
+                sendError('Заказ не найден', 404);
+            }
+        }
+        
+        // Если указан product_id, проверяем существование товара
+        if ($productId !== null) {
+            $checkStmt = $pdo->prepare("SELECT id FROM products WHERE id = ?");
+            $checkStmt->execute([$productId]);
+            if (!$checkStmt->fetch()) {
+                sendError('Товар не найден', 404);
+            }
+        }
+        
+        // Валидация длины заголовка
+        if ($title !== null && mb_strlen($title) > 200) {
+            sendError('Заголовок не может быть длиннее 200 символов', 400);
+        }
+        
+        // Валидация длины комментария
+        if ($comment !== null && mb_strlen($comment) > 2000) {
+            sendError('Комментарий не может быть длиннее 2000 символов', 400);
         }
 
         $stmt = $pdo->prepare("
@@ -142,4 +193,5 @@ try {
     error_log('Reviews API error: ' . $e->getMessage());
     sendError('Ошибка сервера: ' . $e->getMessage(), 500);
 }
+
 
