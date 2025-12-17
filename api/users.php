@@ -17,14 +17,9 @@ try {
         if (!$telegramId) {
             sendError('telegram_id обязателен', 400);
         }
-        
-        // Валидация telegram_id (должен быть числом)
-        if (!is_numeric($telegramId) || (int)$telegramId <= 0) {
-            sendError('Некорректный telegram_id', 400);
-        }
 
         $stmt = $pdo->prepare("SELECT id, telegram_id, first_name, last_name, username, phone, full_name, address, created_at, updated_at FROM users WHERE telegram_id = ?");
-        $stmt->execute([(int)$telegramId]);
+        $stmt->execute([$telegramId]);
         $user = $stmt->fetch();
 
         if (!$user) {
@@ -42,64 +37,32 @@ try {
         }
 
         // Поддерживаем как telegram_id, так и phone для идентификации
-        $telegramId   = isset($data['telegram_id']) && $data['telegram_id'] !== '' && $data['telegram_id'] !== null ? (int)$data['telegram_id'] : null;
-        $phone        = isset($data['phone']) ? trim($data['phone']) : null;
-        $phone        = $phone === '' ? null : $phone;
+        $telegramId   = $data['telegram_id'] ?? null;
+        $phone        = $data['phone'] ?? null;
         
         if (!$telegramId && !$phone) {
             sendError('telegram_id или phone обязателен', 400);
         }
-        
-        // Валидация telegram_id
-        if ($telegramId !== null && $telegramId <= 0) {
-            sendError('Некорректный telegram_id', 400);
-        }
-        
-        // Валидация телефона (базовая проверка формата)
-        if ($phone !== null && !preg_match('/^[\d\s\-\+\(\)]+$/', $phone)) {
-            sendError('Некорректный формат телефона', 400);
-        }
 
-        $firstName    = isset($data['first_name']) ? trim($data['first_name']) : null;
-        $firstName    = $firstName === '' ? null : $firstName;
-        $lastName     = isset($data['last_name']) ? trim($data['last_name']) : null;
-        $lastName     = $lastName === '' ? null : $lastName;
-        $username     = isset($data['username']) ? trim($data['username']) : null;
-        $username     = $username === '' ? null : $username;
-        $fullName     = isset($data['full_name']) ? trim($data['full_name']) : null;
-        $fullName     = $fullName === '' ? null : $fullName;
-        $address      = isset($data['address']) ? trim($data['address']) : null;
-        $address      = $address === '' ? null : $address;
-        
-        // Валидация длины полей
-        if ($firstName !== null && mb_strlen($firstName) > 100) {
-            sendError('first_name не может быть длиннее 100 символов', 400);
-        }
-        if ($lastName !== null && mb_strlen($lastName) > 100) {
-            sendError('last_name не может быть длиннее 100 символов', 400);
-        }
-        if ($username !== null && mb_strlen($username) > 100) {
-            sendError('username не может быть длиннее 100 символов', 400);
-        }
-        if ($fullName !== null && mb_strlen($fullName) > 200) {
-            sendError('full_name не может быть длиннее 200 символов', 400);
-        }
-        if ($address !== null && mb_strlen($address) > 500) {
-            sendError('address не может быть длиннее 500 символов', 400);
-        }
-        if ($phone !== null && mb_strlen($phone) > 20) {
-            sendError('phone не может быть длиннее 20 символов', 400);
-        }
+        $firstName    = $data['first_name'] ?? null;
+        $lastName     = $data['last_name'] ?? null;
+        $username     = $data['username'] ?? null;
+        $fullName     = $data['full_name'] ?? null;
+        $address      = $data['address'] ?? null;
 
         // Проверяем, существует ли пользователь
         if ($telegramId) {
             $stmt = $pdo->prepare("SELECT id FROM users WHERE telegram_id = ?");
             $stmt->execute([$telegramId]);
             $exists = $stmt->fetch();
+            $identifier = 'telegram_id';
+            $identifierValue = $telegramId;
         } else {
             $stmt = $pdo->prepare("SELECT id FROM users WHERE phone = ?");
             $stmt->execute([$phone]);
             $exists = $stmt->fetch();
+            $identifier = 'phone';
+            $identifierValue = $phone;
         }
 
         if ($exists) {

@@ -10,11 +10,6 @@ require_once __DIR__ . '/config.php';
 try {
     $pdo = getDBConnection();
 
-    // Поддерживаем только GET запросы
-    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-        sendError('Метод не поддерживается', 405);
-    }
-
     $stmt = $pdo->query("
         SELECT 
             id, 

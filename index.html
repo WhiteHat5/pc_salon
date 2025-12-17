@@ -4033,7 +4033,7 @@ async function loadUserOrders(){
       // Убеждаемся, что orders - это массив
       const ordersArray = Array.isArray(orders) ? orders : (orders?.orders || orders?.data || []);
       console.log('Orders array:', ordersArray);
-      await renderOrders(ordersArray);
+      renderOrders(ordersArray);
     } else {
       console.warn('API not available');
       ordersList.innerHTML = '';
@@ -4059,7 +4059,7 @@ async function loadUserOrders(){
   }
 }
 
-async function renderOrders(orders){
+function renderOrders(orders){
   const ordersList = qs('#orders-list');
   const ordersEmpty = qs('#orders-empty');
   
@@ -4087,36 +4087,6 @@ async function renderOrders(orders){
     return;
   }
   
-  // Получаем user_id для проверки отзывов
-  let reviewedOrderIds = new Set();
-  try {
-    const tg = safeTelegram();
-    let telegramId = null;
-    let userId = null;
-    
-    if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
-      telegramId = tg.initDataUnsafe.user.id;
-    }
-    
-    if(telegramId && window.API && window.API.users){
-      const user = await window.API.users.getByTelegramId(telegramId);
-      if(user && user.id){
-        userId = user.id;
-        // Получаем отзывы пользователя
-        if(window.API && window.API.reviews){
-          const userReviews = await window.API.reviews.getByUser(userId);
-          reviewedOrderIds = new Set(
-            userReviews
-              .map(r => r.order_id)
-              .filter(id => id !== null && id !== undefined)
-          );
-        }
-      }
-    }
-  } catch(error){
-    console.error('Failed to load user reviews for orders:', error);
-  }
-  
   console.log('renderOrders: Rendering', ordersArray.length, 'orders');
   ordersEmpty.classList.add('hidden');
   ordersEmpty.style.display = 'none';
@@ -4126,7 +4096,6 @@ async function renderOrders(orders){
   const frag = document.createDocumentFragment();
   
   ordersArray.forEach(order => {
-    const hasReview = reviewedOrderIds.has(order.id);
     const orderCard = document.createElement('div');
     orderCard.className = 'card-base rounded-xl p-4 space-y-3';
     
@@ -4184,29 +4153,19 @@ async function renderOrders(orders){
         <span class="text-amber-300 font-semibold">Итого:</span>
         <span class="text-xl font-bold text-amber-400">${formatPrice(order.total_amount || 0)}</span>
       </div>
-      ${!hasReview ? `
       <div class="flex gap-2">
         <button class="flex-1 bg-slate-700 hover:bg-slate-600 text-amber-300 py-2 rounded-lg font-semibold transition text-sm review-order-btn" data-order-id="${order.id}">
           Оставить отзыв
         </button>
       </div>
-      ` : `
-      <div class="flex gap-2">
-        <button class="flex-1 bg-slate-800 text-slate-500 py-2 rounded-lg font-semibold text-sm cursor-not-allowed" disabled>
-          Отзыв оставлен
-        </button>
-      </div>
-      `}
     `;
     
-    // Обработчик кнопки отзыва (только если отзыва еще нет)
-    if(!hasReview){
-      const reviewBtn = orderCard.querySelector('.review-order-btn');
-      if(reviewBtn){
-        reviewBtn.addEventListener('click', () => {
-          openReviewModal(order);
-        });
-      }
+    // Обработчик кнопки отзыва
+    const reviewBtn = orderCard.querySelector('.review-order-btn');
+    if(reviewBtn){
+      reviewBtn.addEventListener('click', () => {
+        openReviewModal(order);
+      });
     }
     
     frag.appendChild(orderCard);
@@ -4286,29 +4245,10 @@ async function loadUserReviews(){
     // Получаем user_id по telegram_id
     if(window.API && window.API.users){
       console.log('Loading user for telegram_id:', telegramId);
-      try {
-        const user = await window.API.users.getByTelegramId(telegramId);
-        console.log('User loaded:', user);
-        if(user && user.id){
-          userId = user.id;
-        } else {
-          // Пытаемся создать пользователя, если его нет
-          console.log('User not found, creating new user...');
-          if(tg && tg.initDataUnsafe && tg.initDataUnsafe.user){
-            const newUser = await window.API.users.createOrUpdate({
-              telegram_id: telegramId,
-              first_name: tg.initDataUnsafe.user.first_name || null,
-              last_name: tg.initDataUnsafe.user.last_name || null,
-              username: tg.initDataUnsafe.user.username || null
-            });
-            if(newUser && newUser.id){
-              userId = newUser.id;
-              console.log('New user created with id:', userId);
-            }
-          }
-        }
-      } catch(error){
-        console.error('Failed to load/create user:', error);
+      const user = await window.API.users.getByTelegramId(telegramId);
+      console.log('User loaded:', user);
+      if(user && user.id){
+        userId = user.id;
       }
     }
     
@@ -4453,6 +4393,7 @@ function renderPublishedReviews(reviews){
       </div>
       ${review.comment ? `<p class="text-white text-sm">${review.comment}</p>` : ''}
       ${review.product_name ? `<p class="text-xs text-amber-300/60">Товар: ${review.product_name}</p>` : ''}
+      ${review.order_id ? `<p class="text-xs text-amber-300/60">Заказ: ${review.order_id}</p>` : ''}
     `;
     
     frag.appendChild(reviewCard);
@@ -4496,22 +4437,16 @@ async function loadPendingReviews(userId){
       return;
     }
     
-    // Получаем все отзывы текущего пользователя
-    let userReviews = [];
-    if(window.API && window.API.reviews && userId){
-      console.log('Loading user reviews for filtering, user_id:', userId);
-      userReviews = await window.API.reviews.getByUser(userId);
-      console.log('User reviews loaded:', userReviews);
-    }
-    
-    // Создаем Set с ID заказов, на которые у пользователя уже есть отзывы
-    const reviewedOrderIds = new Set(
-      userReviews
-        .map(r => r.order_id)
-        .filter(id => id !== null && id !== undefined)
+    // Получаем отзывы по заказам
+    const orderIds = orders.map(o => o.id);
+    const reviewsPromises = orderIds.map(orderId => 
+      window.API.reviews.getByOrder(orderId).catch(() => [])
     );
+    const reviewsArrays = await Promise.all(reviewsPromises);
+    const existingReviews = reviewsArrays.flat();
+    const reviewedOrderIds = new Set(existingReviews.map(r => r.order_id).filter(Boolean));
     
-    // Фильтруем заказы, на которые еще нет отзывов от этого пользователя
+    // Фильтруем заказы, на которые еще нет отзывов
     const ordersWithoutReviews = orders.filter(order => !reviewedOrderIds.has(order.id));
     
     if(ordersWithoutReviews.length === 0){

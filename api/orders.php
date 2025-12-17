@@ -17,9 +17,26 @@ try {
         $orderId = $_GET['id'] ?? null;
 
         if ($orderId !== null) {
-            // Получение одного заказа
+            // Получение одного заказа с товарами
             $stmt = $pdo->prepare("
-                SELECT * FROM orders WHERE id = ?
+                SELECT o.*, 
+                       GROUP_CONCAT(
+                           JSON_OBJECT(
+                               'id', oi.id,
+                               'product_id', oi.product_id,
+                               'item_type', oi.item_type,
+                               'item_name', oi.item_name,
+                               'item_specs', oi.item_specs,
+                               'quantity', oi.quantity,
+                               'unit_price', oi.unit_price,
+                               'total_price', oi.total_price,
+                               'config_data', oi.config_data
+                           ) SEPARATOR '|||'
+                       ) as items_json
+                FROM orders o
+                LEFT JOIN order_items oi ON o.id = oi.order_id
+                WHERE o.id = ?
+                GROUP BY o.id
             ");
             $stmt->execute([(int)$orderId]);
             $order = $stmt->fetch();
@@ -145,53 +162,23 @@ try {
         $orderNumber = 'AURUM-' . date('Y') . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
 
         // Основные данные заказа
-        $userId        = isset($data['user_id']) && $data['user_id'] !== '' ? (int)$data['user_id'] : null;
+        $userId        = $data['user_id'] ?? null;
         $deliveryType  = $data['delivery_type'] ?? 'pickup';
-        $fullName      = trim($data['full_name'] ?? '');
-        $phone         = trim($data['phone'] ?? '');
-        $address       = isset($data['address']) ? trim($data['address']) : null;
-        $address       = $address === '' ? null : $address;
-        $comment       = isset($data['comment']) ? trim($data['comment']) : null;
-        $comment       = $comment === '' ? null : $comment;
-        $totalAmount   = isset($data['total_amount']) ? (float)$data['total_amount'] : 0;
+        $fullName      = $data['full_name'] ?? '';
+        $phone         = $data['phone'] ?? '';
+        $address       = $data['address'] ?? null;
+        $comment       = $data['comment'] ?? null;
+        $totalAmount   = (float)($data['total_amount'] ?? 0);
         $paymentMethod = $data['payment_method'] ?? 'cash';
         $items         = $data['items'] ?? [];
 
-        // Валидация обязательных полей
-        if (empty($items) || !is_array($items)) {
-            throw new Exception('Список товаров пуст или некорректен');
-        }
-        
-        if (empty($fullName)) {
-            throw new Exception('Имя обязательно для заполнения');
-        }
-        
-        if (empty($phone)) {
-            throw new Exception('Телефон обязателен для заполнения');
-        }
-        
-        // Валидация формата телефона (базовая)
-        if (!preg_match('/^[\d\s\-\+\(\)]+$/', $phone)) {
-            throw new Exception('Некорректный формат телефона');
-        }
-        
-        if ($totalAmount <= 0) {
-            throw new Exception('Сумма заказа должна быть больше нуля');
+        if (empty($items) || empty($fullName) || empty($phone) || $totalAmount <= 0) {
+            throw new Exception('Обязательные поля не заполнены');
         }
 
         // Для доставки адрес обязателен
         if ($deliveryType === 'delivery' && (empty($address) || trim($address) === '')) {
             throw new Exception('Адрес доставки обязателен для заказа с доставкой');
-        }
-        
-        // Валидация типа доставки
-        if (!in_array($deliveryType, ['pickup', 'delivery'])) {
-            throw new Exception('Некорректный тип доставки');
-        }
-        
-        // Валидация способа оплаты
-        if (!in_array($paymentMethod, ['cash', 'card', 'online'])) {
-            $paymentMethod = 'cash'; // Значение по умолчанию
         }
 
         // Создаём заказ
@@ -211,66 +198,24 @@ try {
         ");
 
         foreach ($items as $item) {
-            if (!is_array($item)) {
-                throw new Exception('Элемент заказа должен быть массивом');
-            }
-            
-            $productId = isset($item['product_id']) && $item['product_id'] !== '' && $item['product_id'] !== null ? (int)$item['product_id'] : null;
+            $productId = !empty($item['product_id']) ? (int)$item['product_id'] : null;
             $itemType  = $item['item_type'] ?? 'product';
-            $itemName  = trim($item['item_name'] ?? 'Без названия');
-            $quantity  = isset($item['quantity']) ? max(1, (int)$item['quantity']) : 1;
-            $unitPrice = isset($item['unit_price']) ? (float)$item['unit_price'] : 0;
-            $totalPrice = isset($item['total_price']) ? (float)$item['total_price'] : ($unitPrice * $quantity);
-            $itemSpecs = isset($item['item_specs']) ? trim($item['item_specs']) : null;
-            $itemSpecs = $itemSpecs === '' ? null : $itemSpecs;
-            
-            // Валидация типа товара
-            if (!in_array($itemType, ['product', 'config', 'pc'])) {
-                $itemType = 'product';
-            }
 
-            // Для типов 'config' и 'pc' product_id должен быть NULL
-            if ($itemType !== 'product') {
-                $productId = null;
+            // Для типов 'config' и 'pc' product_id может быть NULL — это нормально
+            if ($itemType !== 'product' && $productId !== null) {
+                $productId = null; // Принудительно обнуляем для кастомных и PC
             }
 
             // Проверяем существование товара в БД, если product_id указан
             if ($productId !== null && $itemType === 'product') {
-                $checkStmt = $pdo->prepare("SELECT id FROM products WHERE id = ? AND is_active = 1");
+                $checkStmt = $pdo->prepare("SELECT id FROM products WHERE id = ?");
                 $checkStmt->execute([$productId]);
                 $productExists = $checkStmt->fetch();
                 
                 // Если товар не существует в БД, устанавливаем product_id в NULL
                 if (!$productExists) {
-                    error_log("Product ID {$productId} not found in products table or inactive, setting to NULL");
+                    error_log("Product ID {$productId} not found in products table, setting to NULL");
                     $productId = null;
-                }
-            }
-            
-            // Валидация названия
-            if (empty($itemName)) {
-                $itemName = 'Товар без названия';
-            }
-            
-            // Валидация цен
-            if ($unitPrice < 0) {
-                $unitPrice = 0;
-            }
-            if ($totalPrice < 0) {
-                $totalPrice = $unitPrice * $quantity;
-            }
-
-            // Подготовка config_data для JSON
-            $configData = null;
-            if (isset($item['config_data']) && !empty($item['config_data'])) {
-                if (is_array($item['config_data'])) {
-                    $configData = json_encode($item['config_data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                } else {
-                    // Если уже строка, пытаемся декодировать и перекодировать для валидации
-                    $decoded = json_decode($item['config_data'], true);
-                    if (json_last_error() === JSON_ERROR_NONE) {
-                        $configData = json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                    }
                 }
             }
 
@@ -278,12 +223,12 @@ try {
                 $orderId,
                 $productId, // Может быть NULL
                 $itemType,
-                $itemName,
-                $itemSpecs,
-                $quantity,
-                $unitPrice,
-                $totalPrice,
-                $configData
+                $item['item_name'] ?? 'Без названия',
+                $item['item_specs'] ?? null,
+                $item['quantity'] ?? 1,
+                (float)($item['unit_price'] ?? 0),
+                (float)($item['total_price'] ?? 0),
+                isset($item['config_data']) ? json_encode($item['config_data'], JSON_UNESCAPED_UNICODE) : null
             ]);
         }
 

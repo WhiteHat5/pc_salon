@@ -49,19 +49,6 @@ try {
             ]);
         } elseif ($category !== null) {
             // Товары по категории
-            $categoryId = is_numeric($category) ? (int)$category : null;
-            
-            if ($categoryId === null) {
-                sendError('Некорректный ID категории', 400);
-            }
-            
-            // Проверяем существование категории
-            $checkStmt = $pdo->prepare("SELECT id FROM categories WHERE id = ?");
-            $checkStmt->execute([$categoryId]);
-            if (!$checkStmt->fetch()) {
-                sendError('Категория не найдена', 404);
-            }
-            
             $stmt = $pdo->prepare("
                 SELECT 
                     id,
@@ -75,7 +62,7 @@ try {
                 WHERE category_id = ? AND is_active = 1
                 ORDER BY id ASC
             ");
-            $stmt->execute([$categoryId]);
+            $stmt->execute([$category]);
             $products = $stmt->fetchAll();
 
             sendJSON([
@@ -144,34 +131,16 @@ try {
         $updateValues = [];
 
         if (isset($data['category_id'])) {
-            $categoryId = (int)$data['category_id'];
-            if ($categoryId <= 0) {
-                sendError('category_id должен быть положительным числом', 400);
-            }
-            // Проверяем существование категории
-            $checkStmt = $pdo->prepare("SELECT id FROM categories WHERE id = ?");
-            $checkStmt->execute([$categoryId]);
-            if (!$checkStmt->fetch()) {
-                sendError('Категория не найдена', 404);
-            }
             $updateFields[] = "category_id = ?";
-            $updateValues[] = $categoryId;
+            $updateValues[] = $data['category_id'];
         }
         if (isset($data['name'])) {
-            $name = trim($data['name']);
-            if ($name === '') {
-                sendError('name не может быть пустым', 400);
-            }
             $updateFields[] = "name = ?";
-            $updateValues[] = $name;
+            $updateValues[] = $data['name'];
         }
         if (isset($data['price'])) {
-            $price = (float)$data['price'];
-            if ($price < 0) {
-                sendError('price не может быть отрицательным', 400);
-            }
             $updateFields[] = "price = ?";
-            $updateValues[] = $price;
+            $updateValues[] = (float)$data['price'];
         }
         if (isset($data['image'])) {
             $updateFields[] = "image = ?";
@@ -220,39 +189,20 @@ try {
             sendError('Некорректный JSON', 400);
         }
 
-        $categoryId = isset($data['category_id']) ? (int)$data['category_id'] : null;
-        $name = isset($data['name']) ? trim($data['name']) : null;
-        $price = isset($data['price']) ? $data['price'] : null;
+        $categoryId = $data['category_id'] ?? null;
+        $name = $data['name'] ?? null;
+        $price = $data['price'] ?? null;
 
-        if (!$categoryId || $categoryId <= 0) {
-            sendError('Обязательное поле category_id должно быть положительным числом', 400);
-        }
-        
-        if (!$name || $name === '') {
-            sendError('Обязательное поле name не может быть пустым', 400);
-        }
-        
-        if ($price === null || !is_numeric($price) || $price < 0) {
-            sendError('Обязательное поле price должно быть неотрицательным числом', 400);
+        if (!$categoryId || !$name || $price === null) {
+            sendError('Обязательные поля: category_id, name, price', 400);
         }
 
         // Проверяем существование категории
         $stmt = $pdo->prepare("SELECT id FROM categories WHERE id = ?");
         $stmt->execute([$categoryId]);
         if (!$stmt->fetch()) {
-            sendError('Категория не найдена', 404);
+            sendError('Категория не найдена', 400);
         }
-
-        // Валидация и очистка данных
-        $image = isset($data['image']) ? trim($data['image']) : null;
-        $image = $image === '' ? null : $image;
-        $cpu = isset($data['cpu']) ? trim($data['cpu']) : null;
-        $cpu = $cpu === '' ? null : $cpu;
-        $gpu = isset($data['gpu']) ? trim($data['gpu']) : null;
-        $gpu = $gpu === '' ? null : $gpu;
-        $description = isset($data['description']) ? trim($data['description']) : null;
-        $description = $description === '' ? null : $description;
-        $isActive = isset($data['is_active']) ? ((int)$data['is_active'] > 0 ? 1 : 0) : 1;
 
         $stmt = $pdo->prepare("
             INSERT INTO products (category_id, name, price, image, cpu, gpu, description, is_active)
@@ -263,11 +213,11 @@ try {
             $categoryId,
             $name,
             (float)$price,
-            $image,
-            $cpu,
-            $gpu,
-            $description,
-            $isActive
+            $data['image'] ?? null,
+            $data['cpu'] ?? null,
+            $data['gpu'] ?? null,
+            $data['description'] ?? null,
+            isset($data['is_active']) ? (int)$data['is_active'] : 1
         ]);
 
         $productId = $pdo->lastInsertId();

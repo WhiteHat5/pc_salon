@@ -19,9 +19,7 @@ if (window.API_URL) {
 
 // Утилита для запросов
 async function apiRequest(endpoint, options = {}) {
-    // Убеждаемся, что endpoint не начинается со слеша
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
-    const url = `${API_BASE_URL}/${cleanEndpoint}`;
+    const url = `${API_BASE_URL}/${endpoint}`;
     const config = {
         method: 'GET',
         headers: {
@@ -38,19 +36,8 @@ async function apiRequest(endpoint, options = {}) {
     try {
         const response = await fetch(url, config);
 
-        // Проверяем Content-Type перед парсингом JSON
-        const contentType = response.headers.get('content-type');
-        const isJson = contentType && contentType.includes('application/json');
-        
-        let data;
-        if (isJson) {
-            // Важно: твой config.php всегда возвращает JSON, даже при ошибке
-            data = await response.json();
-        } else {
-            // Если не JSON, пытаемся прочитать как текст для диагностики
-            const text = await response.text();
-            throw new Error(`Сервер вернул не JSON ответ. Статус: ${response.status}. Ответ: ${text.substring(0, 200)}`);
-        }
+        // Важно: твой config.php всегда возвращает JSON, даже при ошибке
+        const data = await response.json();
 
         if (!response.ok) {
             // Сервер вернул ошибку (например, 400, 404, 500)
@@ -60,20 +47,9 @@ async function apiRequest(endpoint, options = {}) {
         // Успешный ответ — возвращаем data (в твоём бэкенде это обычно { data: ..., success: true })
         return data;
     } catch (error) {
-        // Если это уже наша ошибка, пробрасываем дальше
-        if (error.message && (error.message.includes('Сервер вернул не JSON') || error.message.includes('HTTP'))) {
-            throw error;
-        }
-        
         if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
             throw new Error('Нет соединения с сервером. Проверьте интернет или URL API.');
         }
-        
-        // Обработка ошибок парсинга JSON
-        if (error.name === 'SyntaxError' || error instanceof SyntaxError) {
-            throw new Error('Сервер вернул некорректный JSON ответ');
-        }
-        
         throw error; // Пробрасываем дальше для обработки в UI
     }
 }
@@ -96,16 +72,12 @@ const ProductsAPI = {
     },
 
     async getByCategory(categoryId) {
-        // Экранируем categoryId для безопасности
-        const encodedCategoryId = encodeURIComponent(categoryId);
-        const result = await apiRequest(`products.php?category=${encodedCategoryId}`); // Используем ?category= как в бэкенде
+        const result = await apiRequest(`products.php?category=${categoryId}`); // Используем ?category= как в бэкенде
         return result.products || result.data || [];
     },
 
     async getById(productId) {
-        // Экранируем productId для безопасности
-        const encodedProductId = encodeURIComponent(productId);
-        const result = await apiRequest(`products.php?id=${encodedProductId}`);
+        const result = await apiRequest(`products.php?id=${productId}`);
         return result.product || result.data || null;
     }
 };
@@ -121,12 +93,10 @@ const UsersAPI = {
 
     async getByTelegramId(telegramId) {
         try {
-            // Экранируем telegramId для безопасности
-            const encodedTelegramId = encodeURIComponent(telegramId);
-            const result = await apiRequest(`users.php?telegram_id=${encodedTelegramId}`);
+            const result = await apiRequest(`users.php?telegram_id=${telegramId}`);
             return result.user || result.data || null;
         } catch (error) {
-            if (error.message.includes('404') || error.message.includes('Not Found') || error.message.includes('не найден')) {
+            if (error.message.includes('404') || error.message.includes('Not Found')) {
                 return null;
             }
             throw error;
@@ -144,16 +114,12 @@ const OrdersAPI = {
     },
 
     async getByUser(userId) {
-        // Экранируем userId для безопасности
-        const encodedUserId = encodeURIComponent(userId);
-        const result = await apiRequest(`orders.php?user_id=${encodedUserId}`);
+        const result = await apiRequest(`orders.php?user_id=${userId}`);
         return result.orders || result.data || [];
     },
 
     async getByTelegramId(telegramId) {
-        // Экранируем telegramId для безопасности
-        const encodedTelegramId = encodeURIComponent(telegramId);
-        const result = await apiRequest(`orders.php?telegram_id=${encodedTelegramId}`);
+        const result = await apiRequest(`orders.php?telegram_id=${telegramId}`);
         console.log('OrdersAPI.getByTelegramId result:', result);
         // API возвращает { success: true, data: [...], orders: [...] }
         const orders = result.orders || result.data || [];
@@ -162,9 +128,7 @@ const OrdersAPI = {
     },
 
     async getById(orderId) {
-        // Экранируем orderId для безопасности
-        const encodedOrderId = encodeURIComponent(orderId);
-        const result = await apiRequest(`orders.php?id=${encodedOrderId}`);
+        const result = await apiRequest(`orders.php?id=${orderId}`);
         return result.order || result.data || null;
     }
 };
@@ -179,16 +143,12 @@ const ReviewsAPI = {
     },
 
     async getByUser(userId) {
-        // Экранируем userId для безопасности
-        const encodedUserId = encodeURIComponent(userId);
-        const result = await apiRequest(`reviews.php?user_id=${encodedUserId}`);
+        const result = await apiRequest(`reviews.php?user_id=${userId}`);
         return result.reviews || result.data || [];
     },
 
     async getByOrder(orderId) {
-        // Экранируем orderId для безопасности
-        const encodedOrderId = encodeURIComponent(orderId);
-        const result = await apiRequest(`reviews.php?order_id=${encodedOrderId}`);
+        const result = await apiRequest(`reviews.php?order_id=${orderId}`);
         return result.reviews || result.data || [];
     },
 
