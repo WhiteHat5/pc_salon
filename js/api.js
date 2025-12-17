@@ -36,12 +36,23 @@ async function apiRequest(endpoint, options = {}) {
     try {
         const response = await fetch(url, config);
 
-        // Важно: твой config.php всегда возвращает JSON, даже при ошибке
+        // Проверяем Content-Type перед парсингом JSON
+        const contentType = response.headers.get('content-type');
+        const isJson = contentType && contentType.includes('application/json');
+
+        if (!isJson) {
+            // Если ответ не JSON, читаем как текст для отладки
+            const text = await response.text();
+            console.error('API вернул не JSON ответ:', text.substring(0, 200));
+            throw new Error(`Сервер вернул не JSON ответ (${response.status}). Проверьте консоль для деталей.`);
+        }
+
+        // Парсим JSON
         const data = await response.json();
 
         if (!response.ok) {
             // Сервер вернул ошибку (например, 400, 404, 500)
-            throw new Error(data.error || `HTTP ${response.status}`);
+            throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
         }
 
         // Успешный ответ — возвращаем data (в твоём бэкенде это обычно { data: ..., success: true })
@@ -49,6 +60,9 @@ async function apiRequest(endpoint, options = {}) {
     } catch (error) {
         if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
             throw new Error('Нет соединения с сервером. Проверьте интернет или URL API.');
+        }
+        if (error.name === 'SyntaxError' && error.message.includes('JSON')) {
+            throw new Error('Ошибка парсинга ответа сервера. Сервер вернул невалидный JSON.');
         }
         throw error; // Пробрасываем дальше для обработки в UI
     }
@@ -119,12 +133,28 @@ const OrdersAPI = {
     },
 
     async getByTelegramId(telegramId) {
-        const result = await apiRequest(`orders.php?telegram_id=${telegramId}`);
-        console.log('OrdersAPI.getByTelegramId result:', result);
-        // API возвращает { success: true, data: [...], orders: [...] }
-        const orders = result.orders || result.data || [];
-        console.log('OrdersAPI.getByTelegramId returning:', orders);
-        return Array.isArray(orders) ? orders : [];
+        try {
+            const result = await apiRequest(`orders.php?telegram_id=${telegramId}`);
+            console.log('OrdersAPI.getByTelegramId result:', result);
+            // API возвращает { success: true, data: [...], orders: [...] }
+            const orders = result.orders || result.data || [];
+            console.log('OrdersAPI.getByTelegramId returning:', orders);
+            
+            // Убеждаемся, что возвращаем массив
+            if (!Array.isArray(orders)) {
+                console.warn('OrdersAPI.getByTelegramId: result is not an array:', orders);
+                return [];
+            }
+            return orders;
+        } catch (error) {
+            console.error('OrdersAPI.getByTelegramId error:', error);
+            // Если ошибка 404 или пользователь не найден, возвращаем пустой массив
+            if (error.message && (error.message.includes('404') || error.message.includes('не найден'))) {
+                return [];
+            }
+            // Для других ошибок пробрасываем дальше
+            throw error;
+        }
     },
 
     async getById(orderId) {

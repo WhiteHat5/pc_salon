@@ -4026,14 +4026,32 @@ async function loadUserOrders(){
     // Загружаем заказы через API
     if(window.API && window.API.orders){
       console.log('Loading orders for telegram_id:', telegramId);
-      const orders = await window.API.orders.getByTelegramId(telegramId);
-      console.log('Orders loaded:', orders);
-      console.log('Orders type:', typeof orders, 'Is array:', Array.isArray(orders), 'Length:', orders?.length);
-      
-      // Убеждаемся, что orders - это массив
-      const ordersArray = Array.isArray(orders) ? orders : (orders?.orders || orders?.data || []);
-      console.log('Orders array:', ordersArray);
-      renderOrders(ordersArray);
+      try {
+        const orders = await window.API.orders.getByTelegramId(telegramId);
+        console.log('Orders loaded:', orders);
+        console.log('Orders type:', typeof orders, 'Is array:', Array.isArray(orders), 'Length:', orders?.length);
+        
+        // Убеждаемся, что orders - это массив
+        const ordersArray = Array.isArray(orders) ? orders : (orders?.orders || orders?.data || []);
+        console.log('Orders array:', ordersArray);
+        
+        if(ordersArray && ordersArray.length > 0) {
+          renderOrders(ordersArray);
+        } else {
+          // Нет заказов - показываем сообщение
+          ordersList.innerHTML = '';
+          ordersList.style.display = 'none';
+          ordersEmpty.innerHTML = `
+            <div class="text-center text-amber-300 text-xl mb-2">Заказов нет</div>
+            <div class="text-center text-amber-300/60 text-sm">Вы еще не сделали заказ</div>
+          `;
+          ordersEmpty.classList.remove('hidden');
+          ordersEmpty.style.display = 'flex';
+        }
+      } catch(apiError) {
+        console.error('API error loading orders:', apiError);
+        throw apiError; // Пробрасываем дальше для общего catch
+      }
     } else {
       console.warn('API not available');
       ordersList.innerHTML = '';
@@ -4048,11 +4066,30 @@ async function loadUserOrders(){
   } catch(error){
     console.error('Failed to load orders:', error);
     console.error('Error details:', error.message, error.stack);
+    console.error('Error name:', error.name);
+    
+    // Показываем более информативное сообщение об ошибке
+    let errorMessage = 'Не удалось загрузить заказы';
+    if(error.message) {
+      if(error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        errorMessage = 'Проблема с соединением. Проверьте подключение к интернету.';
+      } else if(error.message.includes('404') || error.message.includes('Not Found')) {
+        errorMessage = 'Сервер не найден. Проверьте настройки API.';
+      } else if(error.message.includes('500')) {
+        errorMessage = 'Ошибка на сервере. Попробуйте позже.';
+      } else {
+        errorMessage = 'Не удалось загрузить заказы: ' + error.message;
+      }
+    }
+    
     ordersList.innerHTML = '';
     ordersList.style.display = 'none';
     ordersEmpty.innerHTML = `
       <div class="text-center text-amber-300 text-xl mb-2">Ошибка загрузки</div>
-      <div class="text-center text-amber-300/60 text-sm">Не удалось загрузить заказы</div>
+      <div class="text-center text-amber-300/60 text-sm">${errorMessage}</div>
+      <button onclick="loadUserOrders()" class="mt-4 bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-lg transition">
+        <i class="fas fa-sync-alt mr-2"></i>Попробовать снова
+      </button>
     `;
     ordersEmpty.classList.remove('hidden');
     ordersEmpty.style.display = 'flex';
