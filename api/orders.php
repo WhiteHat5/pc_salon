@@ -368,9 +368,14 @@ try {
         $pdo->rollBack();
     }
     error_log('Orders API error: ' . $e->getMessage());
+    
+    // Очищаем любой вывод перед отправкой ошибки
+    if (ob_get_level()) {
+        ob_clean();
+    }
 
     sendJSON([
         'success' => false,
-        'error' => 'Ошибка сохранения заказа: ' . $e->getMessage()
+        'error' => 'Ошибка: ' . $e->getMessage()
     ], 500);
 }

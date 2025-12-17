@@ -12,7 +12,8 @@ ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
 // Включаем буферизацию вывода для перехвата любых неожиданных выводов
-if (!ob_get_level()) {
+// Начинаем новый уровень буферизации только если его еще нет
+if (ob_get_level() === 0) {
     ob_start();
 }
 
@@ -91,9 +92,16 @@ function getPostData(): ?array
 }
 
 // === CORS заголовки (важно для работы из Telegram WebApp через ngrok) ===
+// Очищаем буфер перед установкой заголовков
+if (ob_get_level()) {
+    ob_clean();
+}
+
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+// Заголовок для ngrok, чтобы пропустить предупреждающую страницу
+header('ngrok-skip-browser-warning: true');
 
 // Обработка preflight-запросов (OPTIONS)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
