@@ -81,9 +81,14 @@ if (!isset($_SESSION['admin_authenticated']) || !$_SESSION['admin_authenticated'
                 </h1>
                 <p class="text-slate-400">Управление товарами и категориями</p>
             </div>
-            <a href="?logout=1" class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition">
-                <i class="fas fa-sign-out-alt mr-2"></i>Выход
-            </a>
+            <div class="flex gap-3">
+                <a href="admin-orders.php" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition">
+                    <i class="fas fa-shopping-cart mr-2"></i>Заказы
+                </a>
+                <a href="?logout=1" class="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition">
+                    <i class="fas fa-sign-out-alt mr-2"></i>Выход
+                </a>
+            </div>
         </div>
 
         <!-- Форма добавления товара -->

@@ -15,6 +15,49 @@ try {
         $userId = $_GET['user_id'] ?? null;
         $telegramId = $_GET['telegram_id'] ?? null;
         $orderId = $_GET['id'] ?? null;
+        $adminMode = isset($_GET['admin']) && $_GET['admin'] === '1';
+
+        // Получение всех заказов для админки
+        if ($adminMode && $orderId === null && $userId === null && $telegramId === null) {
+            $status = $_GET['status'] ?? null;
+            $sql = "SELECT o.*, u.phone as user_phone, u.full_name as user_name 
+                    FROM orders o 
+                    LEFT JOIN users u ON o.user_id = u.id";
+            
+            $conditions = [];
+            $params = [];
+            
+            if ($status !== null && $status !== '') {
+                $conditions[] = "o.order_status = ?";
+                $params[] = $status;
+            }
+            
+            if (!empty($conditions)) {
+                $sql .= " WHERE " . implode(" AND ", $conditions);
+            }
+            
+            $sql .= " ORDER BY o.created_at DESC";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $orders = $stmt->fetchAll();
+
+            // Для каждого заказа получаем товары
+            foreach ($orders as &$order) {
+                $stmt = $pdo->prepare("
+                    SELECT * FROM order_items WHERE order_id = ?
+                ");
+                $stmt->execute([$order['id']]);
+                $order['items'] = $stmt->fetchAll();
+            }
+            unset($order);
+
+            sendJSON([
+                'success' => true,
+                'data' => $orders,
+                'orders' => $orders
+            ]);
+        }
 
         if ($orderId !== null) {
             // Получение одного заказа с товарами
@@ -146,8 +189,77 @@ try {
             ]);
 
         } else {
-            sendError('Необходим параметр user_id, telegram_id или id', 400);
+            sendError('Необходим параметр user_id, telegram_id, id или admin=1', 400);
         }
+
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'PUT' || 
+              ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['_method']) && $_GET['_method'] === 'PUT') ||
+              ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['action'] === 'update')) {
+        // Обновление заказа (для админ-панели)
+        $orderId = $_GET['id'] ?? null;
+        if (!$orderId) {
+            sendError('Необходим параметр id', 400);
+        }
+
+        $data = getPostData();
+        if (!$data) {
+            sendError('Некорректный JSON', 400);
+        }
+
+        // Проверяем существование заказа
+        $stmt = $pdo->prepare("SELECT id FROM orders WHERE id = ?");
+        $stmt->execute([(int)$orderId]);
+        if (!$stmt->fetch()) {
+            sendError('Заказ не найден', 404);
+        }
+
+        // Формируем запрос на обновление только переданных полей
+        $updateFields = [];
+        $updateValues = [];
+
+        if (isset($data['order_status'])) {
+            $allowedStatuses = ['new', 'processing', 'confirmed', 'shipped', 'delivered', 'cancelled'];
+            if (in_array($data['order_status'], $allowedStatuses)) {
+                $updateFields[] = "order_status = ?";
+                $updateValues[] = $data['order_status'];
+            }
+        }
+        if (isset($data['payment_status'])) {
+            $allowedPaymentStatuses = ['pending', 'paid', 'failed'];
+            if (in_array($data['payment_status'], $allowedPaymentStatuses)) {
+                $updateFields[] = "payment_status = ?";
+                $updateValues[] = $data['payment_status'];
+            }
+        }
+        if (isset($data['comment'])) {
+            $updateFields[] = "comment = ?";
+            $updateValues[] = $data['comment'];
+        }
+
+        if (empty($updateFields)) {
+            sendError('Нет полей для обновления', 400);
+        }
+
+        $updateValues[] = (int)$orderId;
+        $sql = "UPDATE orders SET " . implode(", ", $updateFields) . " WHERE id = ?";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($updateValues);
+
+        // Получаем обновленный заказ с товарами
+        $stmt = $pdo->prepare("SELECT * FROM orders WHERE id = ?");
+        $stmt->execute([(int)$orderId]);
+        $order = $stmt->fetch();
+        
+        $stmt = $pdo->prepare("SELECT * FROM order_items WHERE order_id = ?");
+        $stmt->execute([(int)$orderId]);
+        $order['items'] = $stmt->fetchAll();
+
+        sendJSON([
+            'success' => true,
+            'data' => $order,
+            'order' => $order,
+            'message' => 'Заказ успешно обновлен'
+        ]);
 
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $data = getPostData();
