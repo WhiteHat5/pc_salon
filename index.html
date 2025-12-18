@@ -1100,7 +1100,8 @@
   window.API_URL = 'https://unsegmentary-jayna-unlucky.ngrok-free.dev/pc_salon/api';
 </script>
 <!-- API модуль (загружается перед основным скриптом) -->
-<script src="js/api.js"></script>
+<!-- Добавляем версию в query string, чтобы форсировать обновление кэша в Telegram WebApp -->
+<script src="js/api.js?v=2"></script>
 <script>
   // маленькая обёртка для безопасного доступа к Telegram.WebApp, если он присутствует
   function safeTelegram() {
