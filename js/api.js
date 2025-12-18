@@ -36,19 +36,17 @@ async function apiRequest(endpoint, options = {}) {
     try {
         const response = await fetch(url, config);
 
-        // Проверяем Content-Type перед парсингом JSON
-        const contentType = response.headers.get('content-type');
-        const isJson = contentType && contentType.includes('application/json');
-
-        if (!isJson) {
-            // Если ответ не JSON, читаем как текст для отладки
+        // Пытаемся распарсить JSON независимо от заголовка Content-Type,
+        // так как некоторые сервера могут вернуть JSON с другим типом
+        let data;
+        try {
+            data = await response.json();
+        } catch (jsonError) {
+            // Если парсинг JSON не удался, читаем ответ как текст для отладки
             const text = await response.text();
-            console.error('API вернул не JSON ответ:', text.substring(0, 200));
-            throw new Error(`Сервер вернул не JSON ответ (${response.status}). Проверьте консоль для деталей.`);
+            console.error('Не удалось распарсить JSON. Ответ сервера:', text.substring(0, 200));
+            throw new Error('Сервер вернул некорректный JSON или другой формат ответа.');
         }
-
-        // Парсим JSON
-        const data = await response.json();
 
         if (!response.ok) {
             // Сервер вернул ошибку (например, 400, 404, 500)
@@ -60,9 +58,6 @@ async function apiRequest(endpoint, options = {}) {
     } catch (error) {
         if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
             throw new Error('Нет соединения с сервером. Проверьте интернет или URL API.');
-        }
-        if (error.name === 'SyntaxError' && error.message.includes('JSON')) {
-            throw new Error('Ошибка парсинга ответа сервера. Сервер вернул невалидный JSON.');
         }
         throw error; // Пробрасываем дальше для обработки в UI
     }
