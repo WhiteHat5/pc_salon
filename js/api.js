@@ -36,14 +36,13 @@ async function apiRequest(endpoint, options = {}) {
     try {
         const response = await fetch(url, config);
 
-        // Пытаемся распарсить JSON независимо от заголовка Content-Type,
-        // так как некоторые сервера могут вернуть JSON с другим типом
+        // Читаем тело один раз как текст, затем пытаемся распарсить JSON
+        const text = await response.text();
+
         let data;
         try {
-            data = await response.json();
+            data = text ? JSON.parse(text) : {};
         } catch (jsonError) {
-            // Если парсинг JSON не удался, читаем ответ как текст для отладки
-            const text = await response.text();
             console.error('Не удалось распарсить JSON. Ответ сервера:', text.substring(0, 200));
             throw new Error('Сервер вернул некорректный JSON или другой формат ответа.');
         }
