@@ -24,6 +24,8 @@ async function apiRequest(endpoint, options = {}) {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',
+            // Заголовок для ngrok, чтобы отключить HTML-страницу-предупреждение
+            'ngrok-skip-browser-warning': 'true',
             ...options.headers
         },
         ...options
